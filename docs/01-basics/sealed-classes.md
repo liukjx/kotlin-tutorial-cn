@@ -159,6 +159,52 @@ fun <T> handleResult(result: Result): T? = when (result) {
 
 ---
 
+## 实战案例：PICO 动画控制 UI
+
+### 密封类限制参数类型
+
+在 PICO 动画控制组件中，使用密封类限制 TabRow 的参数类型：
+
+```kotlin
+// 文件：animation-0.10.7/app/src/main/java/.../ControlWidgets.kt
+
+/**
+ * TabRow 参数的密封类
+ *
+ * Kotlin 知识点：sealed class
+ * - 限制继承范围，所有子类在同一文件中定义
+ * - 编译器知道所有可能的类型，when 表达式无需 else
+ * - 适合表示有限的类型集合
+ */
+sealed class TabRowParams {
+    // 子类定义...
+}
+
+// 使用示例：when 表达式处理不同类型
+fun renderTabRow(params: TabRowParams) = when (params) {
+    is TabRowParams.Text -> TextTabRow(params.text)
+    is TabRowParams.Icon -> IconTabRow(params.icon)
+    is TabRowParams.Both -> BothTabRow(params.text, params.icon)
+    // 不需要 else！编译器保证覆盖所有情况
+}
+```
+
+**为什么用 sealed class？**
+- TabRow 的参数类型是有限的（文本、图标、或两者）
+- 编译器强制处理所有情况，避免遗漏
+- 新增类型时编译器会提示更新所有 when 分支
+
+### 密封类 vs 枚举的选择
+
+| 场景 | 推荐 | PICO 示例 |
+|------|------|----------|
+| 固定常量值 | 枚举 | `PlaybackState.PLAYING` |
+| 不同状态带数据 | 密封类 | `TabRowParams.Text("播放")` |
+| 类型检查 | 枚举用 == | `state == PlaybackState.PLAYING` |
+| 模式匹配 | 密封类用 is | `when (params) { is Text -> ... }` |
+
+---
+
 ## 练习
 
 ### 1. UI 状态管理

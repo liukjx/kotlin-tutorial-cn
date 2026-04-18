@@ -221,6 +221,111 @@ inline fun repeat(times: Int, action: (Int) -> Unit)
 
 ---
 
+## 实战案例：PICO 枚举缓存优化
+
+### inline + reified - 运行时获取泛型类型
+
+在 PICO 动画项目中，使用 `inline + reified` 实现泛型枚举缓存：
+
+```kotlin
+// 文件：animation-0.10.7/app/src/main/java/.../Extensions.kt
+
+/**
+ * 获取枚举类的所有值（带缓存）
+ *
+ * Kotlin 知识点：inline + reified
+ * - inline: 函数内联，消除泛型擦除
+ * - reified: 具体化泛型参数，可在运行时访问 T::class
+ * - 普通泛型无法在运行时获取类型信息
+ *
+ * 性能优化：
+ * - 首次调用时缓存枚举值
+ * - 后续调用直接返回缓存，避免反射开销
+ */
+inline fun <reified T : Enum<T>> cachedEnumValues(): Array<T> {
+    return EnumValuesCache.instance.getValues(T::class)
+}
+
+// 使用示例
+val states = cachedEnumValues<SkeletalAnimationState>()
+// 等价于 SkeletalAnimationState.values()，但带缓存
+
+val easeTypes = cachedEnumValues<EaseType>()
+// 获取所有缓动类型
+```
+
+**为什么用 inline + reified？**
+- 泛型类型在运行时会被擦除，普通函数无法获取 `T::class`
+- `reified` 保留类型信息，可以在运行时检查类型
+- `inline` 让编译器在调用处展开代码，传递具体类型
+
+### 缓存类实现
+
+```kotlin
+/**
+ * 枚举值缓存类
+ *
+ * 性能优化：避免重复调用反射
+ */
+class EnumValuesCache {
+    private val cache = mutableMapOf<KClass<out Enum<*>>, Array<out Enum<*>>>()
+
+    fun <T : Enum<T>> getValues(enumClass: KClass<T>): Array<T> {
+        @Suppress("UNCHECKED_CAST")
+        return cache.getOrPut(enumClass) {
+            enumClass.java.enumConstants
+                ?: error("No enum constants found for ${enumClass.simpleName}")
+        } as Array<T>
+    }
+
+    companion object {
+        // 单例模式
+        val instance: EnumValuesCache by lazy { EnumValuesCache() }
+    }
+}
+```
+
+### noinline - 保留 Lambda 引用
+
+```kotlin
+// 文件：spatialml-0.10.7/.../VQAWrapper.kt
+
+/**
+ * 创建 VQA 包装器
+ *
+ * Kotlin 知识点：noinline
+ * - noinline 参数不会被内联
+ * - 可以将 Lambda 存储为变量或传递给其他函数
+ */
+inline fun <reified IMAGE_RESPOND, reified VQA_RESPOND> create(
+    noinline ableToQuery: () -> Boolean = { true },
+    noinline queryFormatter: (IMAGE_RESPOND?, ByteArray) -> String,
+    noinline queryRespondParser: (VQA_RESPOND) -> String = { it.toString() },
+): VQAWrapper {
+    // 可以将 noinline 参数存储为成员变量
+    return VQAWrapper(
+        queryFormatter = queryFormatter,
+        queryRespondParser = queryRespondParser
+    )
+}
+```
+
+**何时用 noinline？**
+- 需要将 Lambda 存储为变量
+- 需要将 Lambda 作为参数传递
+- Lambda 需要在内联函数外部使用
+
+### inline 性能对比
+
+| 操作 | 普通 Lambda | 内联函数 |
+|------|-------------|----------|
+| 对象创建 | 每次创建 Function 对象 | 零对象 |
+| 方法调用 | 通过接口调用 | 直接调用 |
+| 性能 | 稍慢 | 更快 |
+| 代码体积 | 小 | 稍大（代码展开） |
+
+---
+
 ## 练习
 
 ### 1. 内联计时器

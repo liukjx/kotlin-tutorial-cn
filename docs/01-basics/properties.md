@@ -302,6 +302,144 @@ val String.lastChar: Char?
 
 ---
 
+## 实战案例：PICO 项目中的属性应用
+
+### by lazy - 延迟初始化单例
+
+在 PICO 动画项目中，使用 `by lazy` 实现线程安全的单例模式：
+
+```kotlin
+// 文件：animation-0.10.7/app/src/main/java/.../Extensions.kt
+
+/**
+ * 枚举值缓存类
+ */
+class EnumValuesCache {
+    private val cache = mutableMapOf<KClass<out Enum<*>>, Array<out Enum<*>>>()
+
+    fun <T : Enum<T>> getValues(enumClass: KClass<T>): Array<T> {
+        return cache.getOrPut(enumClass) {
+            enumClass.java.enumConstants
+                ?: error("No enum constants found")
+        } as Array<T>
+    }
+
+    companion object {
+        /**
+         * 单例实例
+         *
+         * Kotlin 知识点：by lazy
+         * - 延迟初始化：首次访问时才创建
+         * - 线程安全：默认使用同步锁
+         * - 全局复用：避免创建多个实例
+         */
+        val instance: EnumValuesCache by lazy { EnumValuesCache() }
+    }
+}
+
+// 使用示例
+val cache = EnumValuesCache.instance
+// 首次访问时才创建实例
+```
+
+**为什么用 by lazy？**
+- 延迟初始化：不使用时不创建，节省资源
+- 线程安全：多线程环境下保证单例
+- 简洁：比双重检查锁定更简洁
+
+### lateinit - 延迟初始化属性
+
+在 PICO ML 项目中，使用 `lateinit` 延迟初始化属性：
+
+```kotlin
+// 文件：spatialml-0.10.7/.../SrViewModel.kt
+
+/**
+ * 超分辨率视图模型
+ *
+ * Kotlin 知识点：lateinit var
+ * - 延迟初始化：声明时不赋值
+ * - 用于 var（可变属性）
+ * - 不能用于基本类型
+ */
+class SrViewModel : ViewModel() {
+    // 延迟初始化，在 init 块中赋值
+    private lateinit var superResolution: SrAlgorithmImpl
+
+    init {
+        // 在合适的时机初始化
+        viewModelScope.launch {
+            superResolution = SrAlgorithmImpl()
+        }
+    }
+
+    fun processImage(image: Bitmap) {
+        // 检查是否已初始化
+        if (::superResolution.isInitialized) {
+            superResolution.process(image)
+        }
+    }
+}
+```
+
+**lateinit vs by lazy 选择**：
+
+| 特性 | lateinit | by lazy |
+|------|----------|----------|
+| 类型 | var | val |
+| 初始化时机 | 手动控制 | 首次访问 |
+| 可变性 | 可重新赋值 | 不可变 |
+| 线程安全 | 需手动保证 | 自动保证 |
+| 基本类型 | ❌ 不支持 | ✅ 支持 |
+| 空检查 | 需手动检查 | 自动管理 |
+
+### by remember - Compose 状态管理
+
+在 PICO Compose UI 中，大量使用 `by remember` 委托：
+
+```kotlin
+// 文件：component-playground-0.10.7/.../InputPage.kt
+
+@Composable
+fun InputPage(onComponentClick: (ComponentInfo) -> Unit) {
+    // Kotlin 知识点：属性委托
+    // by remember: 将状态委托给 Compose 记忆系统
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var volume by remember { mutableStateOf(50f) }
+
+    // UI 组件
+    TextField(
+        value = username,
+        onValueChange = { username = it }
+    )
+
+    Slider(
+        value = volume,
+        onValueChange = { volume = it }
+    )
+}
+```
+
+**by remember 的优势**：
+- 简化状态访问：`username` 而不是 `username.value`
+- 自动类型推断
+- 与 Compose 重组机制完美配合
+
+### 实际应用总结
+
+| 场景 | 推荐方案 | PICO 示例 |
+|------|----------|----------|
+| 单例模式 | `by lazy` | `EnumValuesCache.instance` |
+| 延迟初始化对象 | `lateinit var` | `SrAlgorithmImpl` |
+| Compose 状态 | `by remember { mutableStateOf() }` | UI 组件状态 |
+| 配置加载 | `by lazy` | 配置文件读取 |
+| 依赖注入 | `lateinit var` | View Binding |
+
+---
+
 ## 练习
 
 ### 1. 懒加载配置

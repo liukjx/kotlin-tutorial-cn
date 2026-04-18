@@ -544,3 +544,86 @@ fun ComponentList() {
 
 - [属性与字段](properties.md) - 深入属性机制
 - [接口](interfaces.md) - 接口与多继承
+
+---
+
+## 补充实战案例：伴生对象
+
+### companion object - 类级成员
+
+在 PICO 项目中，大量使用 `companion object` 管理类级别的常量和方法：
+
+```kotlin
+// 文件：physics-0.10.7/.../PhysicsManager.kt
+
+/**
+ * 物理管理器
+ */
+class PhysicsManager {
+    
+    companion object {
+        // 类级常量
+        const val DEFAULT_GRAVITY = -9.81f
+        const val MAX_OBJECTS = 100
+        
+        // 工厂方法
+        fun createDefault(): PhysicsManager {
+            return PhysicsManager().apply {
+                gravity = DEFAULT_GRAVITY
+            }
+        }
+    }
+    
+    var gravity: Float = DEFAULT_GRAVITY
+    // ...
+}
+
+// 使用
+val manager = PhysicsManager.createDefault()
+println(PhysicsManager.DEFAULT_GRAVITY)
+```
+
+```kotlin
+// 文件：welcomespace-0.10.7/.../FullSpaceRoomViewModel.kt
+
+/**
+ * 房间视图模型
+ *
+ * Kotlin 知识点：companion object
+ * - companion object 中的成员可以用类名直接访问
+ * - 类似 Java 的 static，但更强大
+ * - 可以实现接口、扩展函数
+ */
+class FullSpaceRoomViewModel : ViewModel() {
+    
+    companion object {
+        // 资源路径常量
+        const val SCENE_ROOM = "scene_room.glb"
+        const val SCENE_SKY = "scene_sky.glb"
+        
+        // 标签
+        private const val TAG = "FullSpaceRoomViewModel"
+    }
+    
+    fun loadScene() {
+        viewModelScope.launch {
+            // 使用 companion object 中的常量
+            val room = assetBundle.await().loadModel(SCENE_ROOM)
+        }
+    }
+}
+```
+
+**companion object vs object 选择**：
+
+| 特性 | companion object | object |
+|------|------------------|--------|
+| 所在位置 | 类内部 | 顶层 |
+| 访问方式 | `类名.成员` | `对象名.成员` |
+| 生命周期 | 跟随类 | 应用级单例 |
+| 可实现接口 | ✅ 可以 | ✅ 可以 |
+| 适用场景 | 类的静态成员 | 全局单例 |
+
+**使用建议**：
+- **object**：全局唯一、应用级共享（如日志工具、配置仓库）
+- **companion object**：类相关的常量、工厂方法、静态工具
