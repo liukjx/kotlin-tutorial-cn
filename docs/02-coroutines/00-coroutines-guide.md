@@ -1,41 +1,36 @@
-<contribute-url>https://github.com/Kotlin/kotlinx.coroutines/edit/master/docs/topics/</contribute-url>
+# 协程指南
 
+> 本指南涵盖 `kotlinx.coroutines` 的核心功能，通过一系列示例介绍协程的主要特性。
 
-[//]: # (title: Coroutines guide)
+Kotlin 标准库只提供 minimal low-level API 来支持协程。与其他具有类似能力的语言不同，`async` 和 `await` 在 Kotlin 中不是关键字，甚至不是标准库的一部分。此外，Kotlin 的**挂起函数**概念为异步操作提供了比 futures 和 promises 更安全、更不易出错的抽象。
 
-Kotlin provides only minimal low-level APIs in its standard library to enable other 
-libraries to utilize coroutines. Unlike many other languages with similar capabilities, `async` and `await`
-are not keywords in Kotlin and are not even part of its standard library. Moreover, Kotlin's concept
-of _suspending function_ provides a safer and less error-prone abstraction for asynchronous 
-operations than futures and promises.  
+`kotlinx.coroutines` 是 JetBrains 开发的丰富协程库。它包含许多高级协程原语，本指南将涵盖 `launch`、`async` 等。
 
-`kotlinx.coroutines` is a rich library for coroutines developed by JetBrains. It contains a number of high-level 
-coroutine-enabled primitives that this guide covers, including `launch`, `async`, and others. 
+要使用协程并遵循本指南中的示例，你需要添加 `kotlinx-coroutines-core` 模块的依赖，如[项目 README](https://github.com/Kotlin/kotlinx.coroutines/blob/master/README.md#using-in-your-projects) 中所述。
 
-This is a guide about the core features of `kotlinx.coroutines` with a series of examples, divided up into different topics.
+---
 
-In order to use coroutines as well as follow the examples in this guide, you need to add a dependency on the `kotlinx-coroutines-core` module as explained 
-[in the project README](https://github.com/Kotlin/kotlinx.coroutines/blob/master/README.md#using-in-your-projects).
+## 目录
 
-## Table of contents
+- [协程基础](01-coroutines-basics.md) - 第一个协程、挂起函数、作用域
+- [协程与通道教程](coroutines-and-channels.md) - 入门教程
+- [取消与超时](02-cancellation-and-timeouts.md) - 协程取消、超时处理
+- [组合挂起函数](03-composing-suspending-functions.md) - async、顺序执行、并发
+- [上下文与调度器](04-coroutine-context-and-dispatchers.md) - Dispatcher、Job、作用域
+- [异步流 Flow](05-flow.md) - 冷流、操作符、异常处理
+- [通道 Channel](06-channels.md) - 生产者-消费者、管道
+- [异常处理](07-exception-handling.md) - CoroutineExceptionHandler、监督
+- [共享状态与并发](08-shared-mutable-state-and-concurrency.md) - 线程安全、Mutex、原子操作
+- [Select 表达式（实验性）](select-expression.md)
+- [使用 IntelliJ IDEA 调试协程](debug-coroutines-with-idea.md)
+- [使用 IntelliJ IDEA 调试 Flow](debug-flow-with-idea.md)
 
-* [Coroutines basics](coroutines-basics.md)
-* [Tutorial: Intro to coroutines and channels](coroutines-and-channels.md)
-* [Cancellation and timeouts](cancellation-and-timeouts.md)
-* [Composing suspending functions](composing-suspending-functions.md)
-* [Coroutine context and dispatchers](coroutine-context-and-dispatchers.md)
-* [Asynchronous Flow](flow.md)
-* [Channels](channels.md)
-* [Coroutine exceptions handling](exception-handling.md)
-* [Shared mutable state and concurrency](shared-mutable-state-and-concurrency.md)
-* [Select expression (experimental)](select-expression.md)
-* [Tutorial: Debug coroutines using IntelliJ IDEA](debug-coroutines-with-idea.md)
-* [Tutorial: Debug Kotlin Flow using IntelliJ IDEA](debug-flow-with-idea.md)
+---
 
-## Additional references
+## 额外资源
 
-* [Guide to UI programming with coroutines](https://github.com/Kotlin/kotlinx.coroutines/blob/master/ui/coroutines-guide-ui.md)
-* [Coroutines design document (KEEP)](https://github.com/Kotlin/KEEP/blob/master/proposals/coroutines.md)
-* [Full kotlinx.coroutines API reference](https://kotlinlang.org/api/kotlinx.coroutines/)
-* [Best practices for coroutines in Android](https://developer.android.com/kotlin/coroutines/coroutines-best-practices)
-* [Additional Android resources for Kotlin coroutines and flow](https://developer.android.com/kotlin/coroutines/additional-resources)
+- [UI 编程协程指南](https://github.com/Kotlin/kotlinx.coroutines/blob/master/ui/coroutines-guide-ui.md)
+- [协程设计文档（KEEP）](https://github.com/Kotlin/KEEP/blob/master/proposals/coroutines.md)
+- [kotlinx.coroutines API 参考](https://kotlinlang.org/api/kotlinx.coroutines/)
+- [Android 协程最佳实践](https://developer.android.com/kotlin/coroutines/coroutines-best-practices)
+- [Android Kotlin 协程和 Flow 额外资源](https://developer.android.com/kotlin/coroutines/additional-resources)

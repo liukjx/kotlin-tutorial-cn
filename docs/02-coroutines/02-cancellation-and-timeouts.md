@@ -1,629 +1,341 @@
-<contribute-url>https://github.com/Kotlin/kotlinx.coroutines/edit/master/docs/topics/</contribute-url>
+# 取消与超时
 
-[//]: # (title: Cancellation and timeouts)
+> 取消让你可以在协程完成之前停止它。这对于不再需要的工作（如用户关闭窗口或导航离开）非常有用。
 
-Cancellation lets you stop a coroutine before it completes.
-It stops work that's no longer needed, such as when a user closes a window or navigates away in a user interface while a coroutine is still running.
-You can also use it to release resources early and to stop a coroutine from accessing objects past their disposal.
+取消通过 [`Job`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-job/) 句柄工作，它代表协程的生命周期及其父子关系。`Job` 允许你检查协程是否活跃，并允许你取消它及其子协程（根据[结构化并发](01-coroutines-basics.md#协程作用域与结构化并发)的定义）。
 
-> You can use cancellation to stop long-running coroutines that keep producing values even after other coroutines no longer need them, for example, in [pipelines](channels.md#pipelines).
->
-{style="tip"}
+---
 
-Cancellation works through the [`Job`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-job/) handle, which represents the lifecycle of a coroutine and its parent-child relationships.
-`Job` allows you to check whether the coroutine is active and allows you to cancel it, along with its children, as defined by [structured concurrency](coroutines-basics.md#coroutine-scope-and-structured-concurrency).
+## 取消协程
 
-## Cancel coroutines
+当在协程的 `Job` 句柄上调用 [`cancel()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-job/cancel.html) 函数时，协程被取消。
 
-A coroutine is canceled when the [`cancel()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-job/cancel.html) function is invoked on its `Job` handle.
-[Coroutine builder functions](coroutines-basics.md#coroutine-builder-functions) such as
-[`.launch()`](coroutines-basics.md#coroutinescope-launch) return a `Job`. The [`.async()`](coroutines-basics.md#coroutinescope-async)
-function returns a [`Deferred`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-deferred/), which
-implements `Job` and supports the same cancellation behavior.
+[协程构建器函数](01-coroutines-basics.md#协程构建器函数)如 [`.launch()`](01-coroutines-basics.md#coroutinescope-launch) 返回 `Job`。[`.async()`](01-coroutines-basics.md#coroutinescope-async) 函数返回 [`Deferred`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-deferred/)，它实现了 `Job` 并支持相同的取消行为。
 
-You can call the `cancel()` function manually, or it can be invoked automatically through cancellation propagation when a parent coroutine is canceled.
-
-When a coroutine is canceled, it throws a [`CancellationException`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-cancellation-exception/) the next time it checks for cancellation.
-For more information about how and when this happens, see [Suspension points and cancellation](#suspension-points-and-cancellation).
-
-> You can use the [`awaitCancellation()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/await-cancellation.html) function to suspend a coroutine until it's canceled.
->
-{style="tip"}
-
-Here's an example on how to manually cancel coroutines:
+### 示例
 
 ```kotlin
 import kotlinx.coroutines.*
-import kotlin.time.Duration
 
-//sampleStart
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        // Used as a signal that the coroutine has started running
-        val job1Started = CompletableDeferred<Unit>()
+        val job = launch {
+            println("协程已启动")
+            try {
+                delay(Long.MAX_VALUE)  // 无限挂起
+            } catch (e: CancellationException) {
+                println("协程被取消: $e")
+                throw e  // 始终重新抛出取消异常！
+            }
+            println("这行永远不会执行")
+        }
         
-        val job1: Job = launch {
-            
-            println("The coroutine has started")
-
-            // Completes the CompletableDeferred,
-            // signaling that the coroutine has started running
-            job1Started.complete(Unit)
-            try {
-                // Suspends indefinitely
-                // Without cancellation, this call would never return
-                delay(Duration.INFINITE)
-            } catch (e: CancellationException) {
-                println("The coroutine was canceled: $e")
-              
-                // Always rethrow cancellation exceptions!
-                throw e
-            }
-            println("This line will never be executed")
-        }
-      
-        // Waits for job1 to start before canceling it
-        job1Started.await()
-
-        // Cancels the coroutine, so delay() throws a CancellationException
-        job1.cancel()
-
-        // async returns a Deferred handle, which inherits from Job
-        val job2 = async {
-            // If the coroutine is canceled before its body starts executing,
-            // this line may not be printed
-            println("The second coroutine has started")
-
-            try {
-                // Equivalent to delay(Duration.INFINITE)
-                // Suspends until this coroutine is canceled
-                awaitCancellation()
-
-            } catch (e: CancellationException) {
-                println("The second coroutine was canceled")
-                throw e
-            }
-        }
-        job2.cancel()
+        delay(100)  // 等待协程启动
+        job.cancel()  // 取消协程
     }
-    // Coroutine builders such as withContext() or coroutineScope()
-    // wait for all child coroutines to complete,
-    // even when the children are canceled
-    println("All coroutines have completed")
+    println("所有协程已完成")
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" id="manual-cancellation-example"}
 
-In this example, [`CompletableDeferred`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-completable-deferred/) is used as a signal that the coroutine has started running.
-The coroutine calls `complete()` when it starts executing, and `await()` only returns once that `CompletableDeferred` is completed. This way, cancellation happens only after the coroutine has started running.
-The coroutine created by `.async()` doesn't have this check, so it may be canceled before it can run the code inside its block.
+> 捕获 `CancellationException` 可能会破坏取消传播。如果必须捕获它，请重新抛出以让取消正确传播。
 
-> Catching `CancellationException` can break the cancellation propagation.
-> If you must catch it, rethrow it to let the cancellation propagate correctly through the coroutine hierarchy.
->
-> For more information, see [Coroutine exceptions handling](exception-handling.md#cancellation-and-exceptions).
->
-{style="warning"}
+---
 
-### Cancellation propagation
+## 取消传播
 
-[Structured concurrency](coroutines-basics.md#coroutine-scope-and-structured-concurrency) ensures that canceling a coroutine also cancels all of its children.
-This prevents child coroutines from working after the parent has already stopped.
-
-Here's an example:
+[结构化并发](01-coroutines-basics.md#协程作用域与结构化并发)确保取消一个协程也会取消其所有子协程。这防止子协程在父协程停止后继续工作。
 
 ```kotlin
 import kotlinx.coroutines.*
-import kotlin.time.Duration
 
-//sampleStart
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        // Used as a signal that the child coroutines have been launched
-        val childrenLaunched = CompletableDeferred<Unit>()
-
-        // Launches two child coroutines
         val parentJob = launch {
             launch {
-                println("Child coroutine 1 has started running")
+                println("子协程 1 已启动")
                 try {
                     awaitCancellation()
                 } finally {
-                    println("Child coroutine 1 has been canceled")
+                    println("子协程 1 已被取消")
                 }
             }
             launch {
-                println("Child coroutine 2 has started running")
+                println("子协程 2 已启动")
                 try {
                     awaitCancellation()
                 } finally {
-                    println("Child coroutine 2 has been canceled")
+                    println("子协程 2 已被取消")
                 }
             }
-            // Completes the CompletableDeferred,
-            // signaling that the child coroutines have been launched
-            childrenLaunched.complete(Unit)
         }
-        // Waits for the parent coroutine to signal that it has launched
-        // all of its children
-        childrenLaunched.await()
-
-        // Cancels the parent coroutine, which cancels all its children
-        parentJob.cancel()
+        
+        delay(100)  // 等待子协程启动
+        parentJob.cancel()  // 取消父协程，所有子协程也会被取消
     }
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" id="cancellation-propagation-example"}
 
-In this example, each child coroutine uses a [`finally` block](exceptions.md#the-finally-block), so the code inside it runs when the coroutine is canceled.
-Here, `CompletableDeferred` signals that the child coroutines are launched before they are canceled, but it doesn't guarantee that they start running. If they are canceled first, nothing is printed.
+---
 
-## Make coroutines react to cancellation {id="cancellation-is-cooperative"}
+## 让协程响应取消
 
-In Kotlin, coroutine cancellation is _cooperative_.
-This means that coroutines only react to cancellation when they cooperate by [suspending](#suspension-points-and-cancellation) or [checking for cancellation explicitly](#check-for-cancellation-explicitly).
+在 Kotlin 中，协程取消是**协作的**。这意味着协程只有在协作时才会响应取消——通过[挂起](#挂起点与取消)或[显式检查取消](#显式检查取消)。
 
-In this section, you can learn how to create cancelable coroutines.
+### 挂起点与取消
 
-### Suspension points and cancellation
+当协程被取消时，它会继续运行直到到达代码中可能挂起的点，也称为**挂起点**。如果协程在那里挂起，挂起函数会检查它是否已被取消。如果是，协程停止并抛出 `CancellationException`。
 
-When a coroutine is canceled, it continues running until it reaches a point in the code where it may suspend, also known as a _suspension point_.
-If the coroutine suspends there, the suspending function checks whether it has been canceled.
-If it has, the coroutine stops and throws `CancellationException`.
-
-A call to a `suspend` function is a suspension point, but it doesn't always suspend.
-For example, when awaiting a `Deferred` result, the coroutine only suspends if that `Deferred` isn't completed yet.
-
-Here's an example using common suspending functions that suspend, enabling the coroutine to check and stop when it's canceled:
+常见挂起函数：
 
 ```kotlin
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.channels.Channel
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration
 
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        val childJobs = listOf(
-            launch {
-                // Suspends until canceled
-                awaitCancellation()
-            },
-            launch {
-                // Suspends until canceled
-                delay(Duration.INFINITE)
-            },
-            launch {
+        val jobs = listOf(
+            launch { awaitCancellation() },      // 挂起直到取消
+            launch { delay(Long.MAX_VALUE) },     // 挂起直到取消
+            launch { 
                 val channel = Channel<Int>()
-                // Suspends while waiting for a value that is never sent
-                channel.receive()
+                channel.receive()  // 挂起等待永远不会发送的值
             },
             launch {
                 val deferred = CompletableDeferred<Int>()
-                // Suspends while waiting for a value that is never completed
-                deferred.await()
-            },
-            launch {
-                val mutex = Mutex(locked = true)
-                // Suspends while waiting for a mutex that remains locked indefinitely
-                mutex.lock()
+                deferred.await()  // 挂起等待永远不会完成的值
             }
         )
         
-        // Gives the child coroutines time to start and suspend
-        delay(100.milliseconds)
-        
-        // Cancels all child coroutines
-        childJobs.forEach { it.cancel() }
+        delay(100)  // 给子协程时间启动和挂起
+        jobs.forEach { it.cancel() }  // 取消所有子协程
     }
-    println("All child jobs completed!")
+    println("所有子协程已完成！")
 }
 ```
-{kotlin-runnable="true" id="suspension-points-example"}
 
-> All suspending functions in the `kotlinx.coroutines` library cooperate with cancellation because they use [`suspendCancellableCoroutine()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/suspend-cancellable-coroutine.html) internally, which checks for cancellation when the coroutine suspends.
-> In contrast, custom suspending functions that use [`suspendCoroutine()`](https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.coroutines/suspend-coroutine.html) don't react to cancellation.
->
-{style="tip"}
+> `kotlinx.coroutines` 库中的所有挂起函数都与取消协作，因为它们内部使用 `suspendCancellableCoroutine()`，在协程挂起时检查取消。
 
-### Check for cancellation explicitly
+### 显式检查取消
 
-If a coroutine doesn't [suspend](#suspension-points-and-cancellation) for a long time, it doesn't stop when it's canceled unless it explicitly checks for cancellation.
-
-To check for cancellation, use the following APIs:
-
-* [`isActive`](#isactive) property is `false` when the coroutine is canceled.
-* [`ensureActive()`](#ensureactive) function throws `CancellationException` immediately if the coroutine is canceled.
-* [`yield()`](#yield) function suspends the coroutine, releasing the thread and giving other coroutines a chance to run on it. Suspending the coroutine lets it check for cancellation and throw `CancellationException` if it's canceled.
-
-These APIs are useful when your coroutines run for a long time between suspension points or are unlikely to suspend at suspension points.
+如果协程长时间不挂起，除非显式检查取消，否则被取消时不会停止。
 
 #### isActive
 
-Use the [`isActive`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/is-active.html) property in long-running computations to periodically check for cancellation.
-This property is `false` when the coroutine is no longer active, which you can use to gracefully stop the coroutine when it no longer needs to continue the operation:
-
-Here's an example:
+在长时间运行的计算中使用 [`isActive`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/is-active.html) 属性定期检查取消：
 
 ```kotlin
 import kotlinx.coroutines.*
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.random.Random
 
-//sampleStart
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        val unsortedList = MutableList(10) { Random.nextInt() }
-        
-        // Starts a long-running computation
-        val listSortingJob = launch {
+        val job = launch {
             var i = 0
-
-            // Repeatedly sorts the list while the coroutine remains active
-            while (isActive) {
-                unsortedList.sort()
+            while (isActive) {  // 检查是否活跃
+                // 执行长时间计算
                 ++i
             }
-            println(
-                "Stopped sorting the list after $i iterations"
-            )
+            println("停止计算，已迭代 $i 次")
         }
-        // Sorts the list for 100 milliseconds, then considers it sorted enough
-        delay(100.milliseconds)
-
-        // Cancels the sorting when the result is good enough        
-        listSortingJob.cancel()
-
-        // Waits until the sorting coroutine finishes
-        // before accessing the shared list to avoid data races
-        listSortingJob.join()
-        println("The list is probably sorted: $unsortedList")
+        
+        delay(100)
+        job.cancel()
     }
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" id="isactive-example"}
-
-In this example, the [`join()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-job/join.html) function suspends the coroutine until it finishes. This ensures that the list isn't accessed while the sorting coroutine is still running.
-
-> You can use the [`cancelAndJoin()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/cancel-and-join.html) function to cancel a coroutine and wait for it to finish in a single call.
->
-{style="note"}
 
 #### ensureActive()
 
-Use the [`ensureActive()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/ensure-active.html) function to check for cancellation and stop the current computation by throwing `CancellationException` if the coroutine is canceled:
+使用 [`ensureActive()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/ensure-active.html) 函数检查取消，如果协程被取消则立即抛出 `CancellationException`：
 
 ```kotlin
 import kotlinx.coroutines.*
-import kotlin.time.Duration.Companion.milliseconds
 
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        val childJob = launch {
-            var start = 0
-            try {
-                while (true) {
-                    ++start
-                    // Checks the Collatz conjecture for the current number
-                    var n = start
-                    while (n != 1) {
-                        // Throws CancellationException if the coroutine is canceled
-                        ensureActive()
-                        n = if (n % 2 == 0) n / 2 else 3 * n + 1
-                    }
-                }
-            } finally {
-                println("Checked the Collatz conjecture for 0..${start-1}")
+        val job = launch {
+            repeat(1000) {
+                ensureActive()  // 检查取消
+                // 执行计算
             }
         }
-        // Runs the computation for one second
-        delay(100.milliseconds)
-
-        // Cancels the coroutine
-        childJob.cancel()
+        
+        delay(100)
+        job.cancel()
     }
 }
 ```
-{kotlin-runnable="true" id="ensurective-example"}
 
 #### yield()
 
-The [`yield()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/yield.html) function suspends the coroutine and checks for cancellation before resuming.
-Without suspending, coroutines on the same thread run sequentially.
-
-Use `yield` to allow other coroutines to run on the same thread or thread pool before one of them finishes:
+[`yield()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/yield.html) 函数挂起协程，在恢复前检查取消。它还让其他协程有机会在同一线程上运行：
 
 ```kotlin
 import kotlinx.coroutines.*
 
-//sampleStart
-fun main() {
-    // runBlocking uses the current thread for running all coroutines
-    runBlocking {
-        val coroutineCount = 5
-        repeat(coroutineCount) { coroutineIndex ->
-            launch {
-                val id = coroutineIndex + 1
-                repeat(5) { iterationIndex ->
-                    val iteration = iterationIndex + 1
-                    // Temporarily suspends to give other coroutines a chance to run
-                    // Without this, the coroutines run sequentially
-                    yield()
-                    // Prints the coroutine index and iteration index
-                    println("$id * $iteration = ${id * iteration}")
-                }
+fun main() = runBlocking {
+    repeat(5) { index ->
+        launch {
+            repeat(5) { iteration ->
+                yield()  // 让其他协程运行
+                println("协程 ${index + 1} - 迭代 ${iteration + 1}")
             }
         }
     }
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" id="yield-example"}
 
-In this example, each coroutine uses `yield()` to let other coroutines run between iterations.
+---
 
-### Interrupt blocking code when coroutines are canceled
+## 中断阻塞代码
 
-On the JVM, some functions, such as `Thread.sleep()` or `BlockingQueue.take()`, can block the current thread.
-These blocking functions can be interrupted, which stops them prematurely.
-However, when you call them from a coroutine, cancellation doesn't interrupt the thread.
+在 JVM 上，`Thread.sleep()` 或 `BlockingQueue.take()` 等函数可以阻塞当前线程。这些阻塞函数可以被中断。但是，从协程调用时，取消不会中断线程。
 
-To interrupt the thread when canceling a coroutine, use the [`runInterruptible()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/run-interruptible.html) function:
+要在取消协程时中断线程，使用 [`runInterruptible()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/run-interruptible.html)：
 
 ```kotlin
 import kotlinx.coroutines.*
 
-//sampleStart
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        val childStarted = CompletableDeferred<Unit>()
-        val childJob = launch {
+        val job = launch {
             try {
-                // Cancellation triggers a thread interruption
                 runInterruptible {
-                    childStarted.complete(Unit)
                     try {
-                        // Blocks the current thread for a very long time
-                        Thread.sleep(Long.MAX_VALUE)
+                        Thread.sleep(Long.MAX_VALUE)  // 阻塞线程
                     } catch (e: InterruptedException) {
-                        println("Thread interrupted (Java): $e")
+                        println("线程被中断: $e")
                         throw e
                     }
                 }
             } catch (e: CancellationException) {
-                println("Coroutine canceled (Kotlin): $e")
+                println("协程被取消: $e")
                 throw e
             }
         }
-        childStarted.await()
-
-        // Cancels the coroutine and interrupts the thread
-        // by running Thread.sleep()
-        childJob.cancel()
+        
+        delay(100)
+        job.cancel()  // 取消协程并中断线程
     }
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" id="interrupt-cancellation-example"}
 
-## Handle values safely when canceling coroutines
+---
 
-When a suspended coroutine is canceled, it resumes with a `CancellationException` instead of returning any values, even if those values are already available.
-This behavior is called _prompt cancellation_.
-It prevents your code from continuing in a canceled coroutine's scope, such as updating a screen that's already closed.
+## 安全处理取消时的值
 
-Here's an example:
+当被挂起的协程被取消时，它会以 `CancellationException` 恢复而不是返回任何值。这防止代码在已取消的协程作用域中继续执行。
+
+### 使用 finally 块释放资源
 
 ```kotlin
-import java.nio.file.*
-import java.nio.charset.*
 import kotlinx.coroutines.*
 import java.io.*
-
-// Defines a coroutine scope that uses the UI thread
-class ScreenWithFileContents(private val scope: CoroutineScope) {
-    fun displayFile(path: Path) {
-        scope.launch {
-            val contents = withContext(Dispatchers.IO) {
-                Files.newBufferedReader(
-                    path, Charset.forName("US-ASCII")
-                ).use {
-                    it.readLines()
-                }
-            }
-            // It's safe to call updateUi here,
-            // In case of cancellation, withContext() wouldn't return any values
-            updateUi(contents)
-        }
-    }
-
-    // Throws an exception if called after the user left the screen
-    private fun updateUi(contents: List<String>) {
-      contents.forEach { line -> addOneLineToUi(line) }
-    }
-  
-    private fun addOneLineToUi(line: String) {
-        // Placeholder for code that adds one line to the UI
-    }
-
-    // Only callable from the UI thread
-    fun leaveScreen() {
-        // Cancels the scope when leaving the screen
-        // You can no longer update the UI
-        scope.cancel()
-    }
-}
-```
-
-In this example, `withContext(Dispatchers.IO)` cooperates with cancellation and prevents `updateUI()` from running if the
-`leaveScreen()` function cancels the coroutine before it returns the contents of the file.
-
-While prompt cancellation prevents using values after they are no longer valid, it can also stop your code while an important value is still in use, which might lead to losing that value.
-This can happen when a coroutine receives a value, such as an `AutoCloseable` resource, but is canceled before it can reach the part of the code that closes it.
-To prevent this, keep cleanup logic in a place that's guaranteed to run even when the coroutine receiving the value is canceled.
-
-Here's an example:
-
-```kotlin
-import java.nio.file.*
-import java.nio.charset.*
-import kotlinx.coroutines.*
-import java.io.*
-
-// scope is a coroutine scope using the UI thread
-class ScreenWithFileContents(private val scope: CoroutineScope) {
-    fun displayFile(path: Path) {
-        scope.launch {
-            // Stores the reader in a variable, so the finally block can close it
-            var reader: BufferedReader? = null
-            
-            try {
-                withContext(Dispatchers.IO) {
-                    reader = Files.newBufferedReader(
-                        path, Charset.forName("US-ASCII")
-                    )
-                }
-                // Uses the stored reader after withContext() completes
-                updateUi(reader!!)
-            } finally {
-                // Ensures the reader is closed even when the coroutine is canceled
-                reader?.close()
-            }
-        }
-    }
-
-    private suspend fun updateUi(reader: BufferedReader) {
-        // Shows the file contents
-        while (true) {
-            val line = withContext(Dispatchers.IO) {
-                reader.readLine()
-            }
-            if (line == null)
-                break
-            addOneLineToUi(line)
-        }
-    }
-
-    private fun addOneLineToUi(line: String) {
-        // Placeholder for code that adds one line to the UI
-    }
-
-    // Only callable from the UI thread
-    fun leaveScreen() {
-        // Cancels the scope when leaving the screen
-        // You can no longer update the UI
-        scope.cancel()
-    }
-}
-```
-
-In this example, storing the `BufferedReader` in a variable and closing it in the `finally` block ensures the resource is released even if the coroutine is canceled.
-
-### Run non-cancelable blocks
-
-You can prevent cancellation from affecting certain parts of a coroutine.
-To do so, pass [`NonCancellable`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-non-cancellable/) as an argument to the `withContext()` coroutine builder function.
-
-> Avoid using `NonCancellable` with other coroutine builders like `.launch()` or `.async()`. Doing so disrupts structured concurrency by breaking the parent-child relationship.
->
-{style="warning"}
-
-`NonCancellable` is useful when you need to ensure that certain operations, such as closing resources with a suspending `close()` function,
-complete even if the coroutine is canceled before they finish.
-
-Here's an example:
-
-```kotlin
-import kotlinx.coroutines.*
-import kotlin.time.Duration.Companion.milliseconds
-
-//sampleStart
-val serviceStarted = CompletableDeferred<Unit>()
-
-fun startService() {
-    println("Starting the service...")
-    serviceStarted.complete(Unit)
-}
-
-suspend fun shutdownServiceAndWait() {
-    println("Shutting down...")
-    delay(100.milliseconds)
-    println("Successfully shut down!")
-}
 
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        val childJob = launch {
-            startService()
+        val job = launch {
+            var reader: BufferedReader? = null
+            try {
+                withContext(Dispatchers.IO) {
+                    reader = File("data.txt").bufferedReader()
+                }
+                // 使用 reader
+            } finally {
+                reader?.close()  // 确保资源被关闭
+            }
+        }
+        
+        delay(100)
+        job.cancel()
+    }
+}
+```
+
+### 运行不可取消的代码块
+
+使用 [`NonCancellable`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-non-cancellable/) 防止取消影响某些操作：
+
+```kotlin
+import kotlinx.coroutines.*
+
+suspend fun main() {
+    withContext(Dispatchers.Default) {
+        val job = launch {
             try {
                 awaitCancellation()
             } finally {
                 withContext(NonCancellable) {
-                    // Without withContext(NonCancellable),
-                    // This function doesn't complete because the coroutine is canceled
-                    shutdownServiceAndWait()
+                    println("执行清理...")
+                    delay(100)  // 即使协程被取消也会完成
+                    println("清理完成")
                 }
             }
         }
-        serviceStarted.await()
-        childJob.cancel()
+        
+        delay(100)
+        job.cancel()
     }
-    println("Exiting the program")
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" id="noncancellable-blocks-example"}
 
-## Timeout
+> 避免在 `.launch()` 或 `.async()` 中使用 `NonCancellable`，这会破坏结构化并发。
 
-Timeouts allow you to automatically cancel a coroutine after a specified duration.
-They are useful for stopping operations that take too long, helping to keep your application responsive and avoid blocking threads unnecessarily.
+---
 
-To specify a timeout, use the [`withTimeoutOrNull()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-timeout-or-null.html) function with a `Duration`:
+## 超时
+
+超时允许你在指定时间后自动取消协程。这对于停止耗时过长的操作很有用。
+
+### withTimeoutOrNull
 
 ```kotlin
 import kotlinx.coroutines.*
 import kotlin.time.Duration.Companion.milliseconds
 
-//sampleStart
-suspend fun slowOperation(): Int {
-    try {
-        delay(300.milliseconds)
-        return 5
-    } catch (e: CancellationException) {
-        println("The slow operation has been canceled: $e")
-        throw e
-    }
-}
-
-suspend fun fastOperation(): Int {
-    try {
-        delay(15.milliseconds)
-        return 14
-    } catch (e: CancellationException) {
-        println("The fast operation has been canceled: $e")
-        throw e
-    }
-}
-
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        val slow = withTimeoutOrNull(100.milliseconds) {
-            slowOperation()
+        val result1 = withTimeoutOrNull(100.milliseconds) {
+            delay(300)  // 模拟慢操作
+            "完成"
         }
-        println("The slow operation finished with $slow")
-        val fast = withTimeoutOrNull(100.milliseconds) {
-            fastOperation()
+        println("慢操作结果: $result1")  // null（超时）
+        
+        val result2 = withTimeoutOrNull(100.milliseconds) {
+            delay(15)  // 模拟快操作
+            "完成"
         }
-        println("The fast operation finished with $fast")
+        println("快操作结果: $result2")  // "完成"
     }
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" id="timeout-example"}
 
-If the timeout exceeds the specified `Duration`, `withTimeoutOrNull()` returns `null`.
+### withTimeout
+
+`withTimeout` 在超时时抛出 `TimeoutCancellationException`：
+
+```kotlin
+try {
+    withTimeout(100.milliseconds) {
+        delay(300)
+        "完成"
+    }
+} catch (e: TimeoutCancellationException) {
+    println("操作超时")
+}
+```
+
+---
+
+## 最佳实践
+
+1. **始终重新抛出 CancellationException** - 它是协程取消的机制
+2. **使用 finally 块释放资源** - 确保资源被正确关闭
+3. **在长时间计算中检查取消** - 使用 `isActive` 或 `ensureActive()`
+4. **使用 withTimeoutOrNull 而非 withTimeout** - 更安全，返回 null 而非抛出异常
+5. **避免在 finally 块中使用挂起函数** - 除非使用 `NonCancellable`
+
+---
+
+## 下一步
+
+- [组合挂起函数](03-composing-suspending-functions.md) - async、顺序执行、并发
+- [异常处理](07-exception-handling.md) - 更详细的异常处理机制

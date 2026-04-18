@@ -1,25 +1,20 @@
-<contribute-url>https://github.com/Kotlin/kotlinx.coroutines/edit/master/docs/topics/</contribute-url>
+# 协程基础
 
-[//]: # (title: Coroutines basics)
+> 本节介绍协程的核心概念：挂起函数、协程作用域、协程构建器、调度器等。
 
-To create applications that perform multiple tasks at once, a concept known as concurrency,
-Kotlin uses _coroutines_. A coroutine is a suspendable computation that lets you write concurrent code in a clear, sequential style.
-Coroutines can run concurrently with other coroutines and potentially in parallel.
+要创建同时执行多个任务的应用程序（称为并发），Kotlin 使用**协程**。协程是一种可挂起的计算，让你能够以清晰的顺序风格编写并发代码。协程可以与其他协程并发运行，甚至可能并行运行。
 
-On the JVM and in Kotlin/Native, all concurrent code, such as coroutines, runs on _threads_, managed by the operating system.
-Coroutines can suspend their execution instead of blocking a thread.
-This allows one coroutine to suspend while waiting for some data to arrive and another coroutine to run on the same thread, ensuring effective resource utilization.
+在 JVM 和 Kotlin/Native 上，所有并发代码（如协程）都在操作系统管理的**线程**上运行。协程可以挂起其执行而不是阻塞线程。这允许一个协程在等待数据到达时挂起，而另一个协程在同一线程上运行，确保有效的资源利用。
 
-![Comparing parallel and concurrent threads](parallelism-and-concurrency.svg){width="700"}
+![并行与并发线程对比](parallelism-and-concurrency.svg){width="700"}
 
-For more information about the differences between coroutines and threads, see [Comparing coroutines and JVM threads](#comparing-coroutines-and-jvm-threads).
+---
 
-## Suspending functions
+## 挂起函数
 
-The most basic building block of coroutines is the _suspending function_.
-It allows a running operation to pause and resume later without affecting the structure of your code.
+协程最基本的构建块是**挂起函数**。它允许正在运行的操作暂停并稍后恢复，而不影响代码结构。
 
-To declare a suspending function, use the `suspend` keyword:
+要声明挂起函数，使用 `suspend` 关键字：
 
 ```kotlin
 suspend fun greet() {
@@ -27,8 +22,7 @@ suspend fun greet() {
 }
 ```
 
-You can only call a suspending function from another suspending function.
-To call suspending functions at the entry point of a Kotlin application, mark the `main()` function with the `suspend` keyword:
+你只能从另一个挂起函数调用挂起函数。要在 Kotlin 应用程序的入口点调用挂起函数，用 `suspend` 关键字标记 `main()` 函数：
 
 ```kotlin
 suspend fun main() {
@@ -45,20 +39,16 @@ suspend fun greet() {
     println("Hello world from a suspending function")
 }
 ```
-{kotlin-runnable="true"}
 
-This example doesn't use concurrency yet, but by marking the functions with the `suspend` keyword,
-you allow them to call other suspending functions and run concurrent code inside.
+虽然这个示例还没有使用并发，但通过用 `suspend` 关键字标记函数，你允许它们调用其他挂起函数并在其中运行并发代码。
 
-While the `suspend` keyword is part of the core Kotlin language, most coroutine features
-are available through the [`kotlinx.coroutines`](https://github.com/Kotlin/kotlinx.coroutines) library.
+---
 
-## Add the kotlinx.coroutines library to your project
+## 添加 kotlinx.coroutines 库
 
-To include the `kotlinx.coroutines` library in your project, add the corresponding dependency configuration based on your build tool:
+要在项目中包含 `kotlinx.coroutines` 库，根据你的构建工具添加相应的依赖配置：
 
-<tabs group="build-tool">
-<tab title="Kotlin" group-key="kotlin">
+**Gradle (Kotlin DSL)**
 
 ```kotlin
 // build.gradle.kts
@@ -67,12 +57,11 @@ repositories {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:%coroutinesVersion%")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 }
 ```
 
-</tab>
-<tab title="Groovy" group-key="groovy">
+**Gradle (Groovy)**
 
 ```groovy
 // build.gradle
@@ -81,12 +70,11 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:%coroutinesVersion%'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
 }
 ```
-</tab>
 
-<tab title="Maven" group-key="maven">
+**Maven**
 
 ```xml
 <!-- pom.xml -->
@@ -95,294 +83,128 @@ dependencies {
         <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-coroutines-core</artifactId>
-            <version>%coroutinesVersion%</version>
+            <version>1.7.3</version>
         </dependency>
     </dependencies>
     ...
 </project>
 ```
 
-</tab>
-</tabs>
+---
 
+## 创建你的第一个协程
 
-## Create your first coroutines
+要在 Kotlin 中创建协程，你需要：
 
-> The examples on this page use the explicit `this` expression with the coroutine builder functions `CoroutineScope.launch()` and `CoroutineScope.async()`.
-> These coroutine builders are [extension functions](extensions.md) on `CoroutineScope`, and the `this` expression refers to the current `CoroutineScope` as the receiver.
->
-> For a practical example, see [Extract coroutine builders from the coroutine scope](#extract-coroutine-builders-from-the-coroutine-scope).
->
-{style="note"}
+- 一个[挂起函数](#挂起函数)
+- 一个可以运行它的[协程作用域](#协程作用域与结构化并发)
+- 一个[协程构建器](#协程构建器函数)如 `CoroutineScope.launch()` 来启动它
+- 一个[调度器](#协程调度器)来控制它使用哪些线程
 
-To create a coroutine in Kotlin, you need the following:
-
-* A [suspending function](#suspending-functions).
-* A [coroutine scope](#coroutine-scope-and-structured-concurrency) in which it can run, for example inside the `withContext()` function.
-* A [coroutine builder](#coroutine-builder-functions) like `CoroutineScope.launch()` to start it.
-* A [dispatcher](#coroutine-dispatchers) to control which threads it uses.
-
-Let's look at an example that uses multiple coroutines in a multithreaded environment:
-
-1. Import the `kotlinx.coroutines` library:
-
-    ```kotlin
-    import kotlinx.coroutines.*
-    ```
-
-2. Mark functions that can pause and resume with the `suspend` keyword:
-
-    ```kotlin
-    suspend fun greet() {
-        println("The greet() on the thread: ${Thread.currentThread().name}")
-    }
-    
-    suspend fun main() {}
-    ```
-
-    > While you can mark the `main()` function as `suspend` in some projects, it may not be possible when integrating with existing code or using a framework.
-    > In that case, check the framework's documentation to see if it supports calling suspending functions.
-    > If not, use [`runBlocking()`](#runblocking) to call them by blocking the current thread.
-    > 
-    {style="note"}
-
-3. Add the [`delay()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/delay.html#) function to simulate a suspending task, such as fetching data or writing to a database:
-
-    ```kotlin
-    suspend fun greet() {
-        println("The greet() on the thread: ${Thread.currentThread().name}")
-        delay(1000L)
-    }
-   ```
-
-    <!-- > Use [`kotlin.time.Duration`](https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/) from the Kotlin standard library to express durations like `delay(1.seconds)` instead of using milliseconds.
-    >
-    {style="tip"} -->
-
-4. Use [`withContext(Dispatchers.Default)`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html#) to define an entry point for multithreaded concurrent code that runs on a shared thread pool:
-
-    ```kotlin
-    suspend fun main() {
-        withContext(Dispatchers.Default) {
-            // Add the coroutine builders here
-        }
-    }
-    ```
-
-   > The suspending `withContext()` function is typically used for [context switching](coroutine-context-and-dispatchers.md#jumping-between-threads), but in this example,
-   > it also defines a non-blocking entry point for concurrent code.
-   > It uses the [`Dispatchers.Default` dispatcher](#coroutine-dispatchers) to run code on a shared thread pool for multithreaded execution.
-   > By default, this pool uses up to as many threads as there are CPU cores available at runtime, with a minimum of two threads.
-   > 
-   > The coroutines launched inside the `withContext()` block share the same coroutine scope, which ensures [structured concurrency](#coroutine-scope-and-structured-concurrency).
-   > 
-   {style="note"}
-
-5. Use a [coroutine builder function](#coroutine-builder-functions) like [`CoroutineScope.launch()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/launch.html) to start the coroutine:
-
-    ```kotlin
-    suspend fun main() {
-        withContext(Dispatchers.Default) { // this: CoroutineScope
-            // Starts a coroutine inside the scope with CoroutineScope.launch()
-            this.launch { greet() }
-            println("The withContext() on the thread: ${Thread.currentThread().name}")
-        }
-    }
-    ```
-
-6. Combine these pieces to run multiple coroutines at the same time on a shared pool of threads:
-
-    ```kotlin
-    // Imports the coroutines library
-    import kotlinx.coroutines.*
-
-    // Imports the kotlin.time.Duration to express duration in seconds
-    import kotlin.time.Duration.Companion.seconds
-
-    // Defines a suspending function
-    suspend fun greet() {
-        println("The greet() on the thread: ${Thread.currentThread().name}")
-        // Suspends for 1 second and releases the thread
-        delay(1.seconds) 
-        // The delay() function simulates a suspending API call here
-        // You can add suspending API calls here like a network request
-    }
-
-    suspend fun main() {
-        // Runs the code inside this block on a shared thread pool
-        withContext(Dispatchers.Default) { // this: CoroutineScope
-            this.launch() {
-                greet()
-            }
-   
-            // Starts another coroutine
-            this.launch() {
-                println("The CoroutineScope.launch() on the thread: ${Thread.currentThread().name}")
-                delay(1.seconds)
-                // The delay function simulates a suspending API call here
-                // You can add suspending API calls here like a network request
-            }
-    
-            println("The withContext() on the thread: ${Thread.currentThread().name}")
-        }
-    }
-    ```
-    {kotlin-runnable="true"}
-
-Try running the example multiple times. 
-You may notice that the output order and thread names may change each time you run the program, because the OS decides when threads run.
-
-> You can display coroutine names next to thread names in the output of your code for additional information.
-> To do so, pass the `-Dkotlinx.coroutines.debug` VM option in your build tool or IDE run configuration.
->
-> See [Debugging coroutines](https://github.com/Kotlin/kotlinx.coroutines/blob/master/docs/topics/debugging.md) for more information.
->
-{style="tip"}
-
-## Coroutine scope and structured concurrency
-
-When you run many coroutines in an application, you need a way to manage them as groups.
-Kotlin coroutines rely on a principle called _structured concurrency_ to provide this structure.
-
-According to this principle, coroutines form a tree hierarchy of parent and child tasks with linked lifecycles.
-A coroutine's lifecycle is the sequence of states from its creation until completion, failure, or cancellation.
-
-A parent coroutine waits for its children to complete before it finishes.
-If the parent coroutine fails or gets canceled, all its child coroutines are recursively canceled too.
-Keeping coroutines connected this way makes cancellation and error handling predictable and safe.
-
-To maintain structured concurrency, new coroutines can only be launched in a [`CoroutineScope`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-coroutine-scope/) that defines and manages their lifecycle.
-The `CoroutineScope` includes the _coroutine context_, which defines the dispatcher and other execution properties.
-When you start a coroutine inside another coroutine, it automatically becomes a child of its parent scope.
-
-Calling a [coroutine builder function](#coroutine-builder-functions), such as `CoroutineScope.launch()` on a `CoroutineScope`, starts a child coroutine of the coroutine associated with that scope.
-Inside the builder's block, the [receiver](lambdas.md#function-literals-with-receiver) is a nested `CoroutineScope`, so any coroutines you launch there become its children.
-
-### Create a coroutine scope with the `coroutineScope()` function
-
-To create a new coroutine scope with the current coroutine context, use the
-[`coroutineScope()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/coroutine-scope.html) function.
-This function creates a root coroutine of the coroutine subtree.
-It's the direct parent of coroutines launched inside the block and the indirect parent of any coroutines they launch.
-`coroutineScope()` executes the suspending block and waits until the block and any coroutines launched in it complete.
-
-Here's an example:
+让我们看一个在多线程环境中使用多个协程的示例：
 
 ```kotlin
-// Imports the kotlin.time.Duration to express duration in seconds
-import kotlin.time.Duration.Companion.seconds
-
+// 导入协程库
 import kotlinx.coroutines.*
 
-// If the coroutine context doesn't specify a dispatcher,
-// CoroutineScope.launch() uses Dispatchers.Default
-//sampleStart
+// 导入 kotlin.time.Duration 以秒为单位表达时长
+import kotlin.time.Duration.Companion.seconds
+
+// 定义挂起函数
+suspend fun greet() {
+    println("greet() 运行在线程: ${Thread.currentThread().name}")
+    // 挂起 1 秒并释放线程
+    delay(1.seconds)
+    // delay() 函数在这里模拟挂起的 API 调用
+    // 你可以在这里添加挂起的 API 调用，如网络请求
+}
+
 suspend fun main() {
-    // Root of the coroutine subtree
+    // 在共享线程池上运行此块中的代码
+    withContext(Dispatchers.Default) { // this: CoroutineScope
+        this.launch {
+            greet()
+        }
+
+        // 启动另一个协程
+        this.launch {
+            println("CoroutineScope.launch() 运行在线程: ${Thread.currentThread().name}")
+            delay(1.seconds)
+        }
+
+        println("withContext() 运行在线程: ${Thread.currentThread().name}")
+    }
+}
+```
+
+尝试多次运行此示例。你可能会注意到每次运行程序时输出顺序和线程名可能会改变，因为操作系统决定线程何时运行。
+
+---
+
+## 协程作用域与结构化并发
+
+当你在应用程序中运行许多协程时，你需要一种方法将它们作为组来管理。Kotlin 协程依赖于**结构化并发**原则来提供这种结构。
+
+根据这一原则，协程形成父子任务的树形层次结构，具有链接的生命周期。协程的生命周期是从创建到完成、失败或取消的状态序列。
+
+父协程在完成之前等待其子协程完成。如果父协程失败或被取消，其所有子协程也会递归取消。以这种方式保持协程连接使取消和错误处理变得可预测和安全。
+
+要维护结构化并发，新协程只能在 [`CoroutineScope`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-coroutine-scope/) 中启动，该作用域定义并管理它们的生命周期。`CoroutineScope` 包含**协程上下文**，它定义调度器和其他执行属性。当你在另一个协程内启动协程时，它会自动成为其父作用域的子级。
+
+### 使用 coroutineScope() 创建协程作用域
+
+要使用当前协程上下文创建新的协程作用域，使用 [`coroutineScope()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/coroutine-scope.html) 函数。此函数创建协程子树的根协程。它是在块中启动的协程的直接父级，以及它们启动的任何协程的间接父级。`coroutineScope()` 执行挂起块并等待该块及其启动的任何协程完成。
+
+示例：
+
+```kotlin
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.*
+
+suspend fun main() {
+    // 协程子树的根
     coroutineScope { // this: CoroutineScope
         this.launch {
             this.launch {
                 delay(2.seconds)
-                println("Child of the enclosing coroutine completed")
+                println("子协程完成")
             }
-            println("Child coroutine 1 completed")
+            println("子协程 1 完成")
         }
         this.launch {
             delay(1.seconds)
-            println("Child coroutine 2 completed")
+            println("子协程 2 完成")
         }
     }
-    // Runs only after all children in the coroutineScope have completed
-    println("Coroutine scope completed")
-}
-//sampleEnd
-```
-{kotlin-runnable="true"}
-
-Since no [dispatcher](#coroutine-dispatchers) is specified in this example, the `CoroutineScope.launch()` builder functions in the `coroutineScope()` block inherit the current context.
-If that context doesn't have a specified dispatcher, `CoroutineScope.launch()` uses `Dispatchers.Default`, which runs on a shared pool of threads.
-
-### Extract coroutine builders from the coroutine scope
-
-In some cases, you may want to extract coroutine builder calls, such as [`CoroutineScope.launch()`](#coroutinescope-launch), into separate functions.
-
-Consider the following example:
-
-```kotlin
-suspend fun main() {
-    coroutineScope { // this: CoroutineScope
-        // Calls CoroutineScope.launch() where CoroutineScope is the receiver
-        this.launch { println("1") }
-        this.launch { println("2") }
-    } 
+    // 只有在 coroutineScope 中的所有子协程完成后才运行
+    println("协程作用域完成")
 }
 ```
 
-> You can also write `this.launch` without the explicit `this` expression, as `launch`.
-> These examples use explicit `this` expressions to highlight that it's an extension function on `CoroutineScope`.
->
-> For more information on how lambdas with receivers work in Kotlin, see [Function literals with receiver](lambdas.md#function-literals-with-receiver).
->
-{style="tip"}
+由于此示例中没有指定[调度器](#协程调度器)，`coroutineScope()` 块中的 `CoroutineScope.launch()` 构建器函数继承当前上下文。如果该上下文没有指定的调度器，`CoroutineScope.launch()` 使用 `Dispatchers.Default`，它在共享线程池上运行。
 
-The `coroutineScope()` function takes a lambda with a `CoroutineScope` receiver.
-Inside this lambda, the implicit receiver is a `CoroutineScope`, so builder functions like `CoroutineScope.launch()` and [`CoroutineScope.async()`](#coroutinescope-async) resolve as
-[extension functions](extensions.md#extension-functions) on that receiver.
+---
 
-To extract the coroutine builders into another function, that function must declare a `CoroutineScope` receiver, otherwise a compilation error occurs:
+## 协程构建器函数
 
-```kotlin
-import kotlinx.coroutines.*
-//sampleStart
-suspend fun main() {
-    coroutineScope {
-        launchAll()
-    }
-}
+协程构建器函数是接受 `suspend` [lambda](../01-basics/lambdas.md) 的函数，该 lambda 定义要运行的协程。以下是一些示例：
 
-fun CoroutineScope.launchAll() { // this: CoroutineScope
-    // Calls .launch() on CoroutineScope
-    this.launch { println("1") }
-    this.launch { println("2") } 
-}
-//sampleEnd
-/* -- Calling launch without declaring CoroutineScope as the receiver results in a compilation error --
+- [`CoroutineScope.launch()`](#coroutinescope-launch)
+- [`CoroutineScope.async()`](#coroutinescope-async)
+- [`runBlocking()`](#runblocking)
+- [`withContext()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html)
+- [`coroutineScope()`](#使用-coroutinescope-创建协程作用域)
 
-fun launchAll() {
-    // Compilation error: this is not defined
-    this.launch { println("1") }
-    this.launch { println("2") }
-}
- */
-```
-{kotlin-runnable="true"}
+协程构建器函数需要在 `CoroutineScope` 中运行。这可以是现有作用域或你使用辅助函数如 `coroutineScope()`、[`runBlocking()`](#runblocking) 或 [`withContext()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html#) 创建的作用域。每个构建器定义协程如何启动以及你如何与其结果交互。
 
-## Coroutine builder functions
+### CoroutineScope.launch()
 
-A coroutine builder function is a function that accepts a `suspend` [lambda](lambdas.md) that defines a coroutine to run.
-Here are some examples:
+[`CoroutineScope.launch()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/launch.html#) 协程构建器函数是 `CoroutineScope` 上的扩展函数。它在现有[协程作用域](#协程作用域与结构化并发)内启动新协程而不阻塞作用域的其余部分。
 
-* [`CoroutineScope.launch()`](#coroutinescope-launch)
-* [`CoroutineScope.async()`](#coroutinescope-async)
-* [`runBlocking()`](#runblocking)
-* [`withContext()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html)
-* [`coroutineScope()`](#create-a-coroutine-scope-with-the-coroutinescope-function)
-
-Coroutine builder functions require a `CoroutineScope` to run in.
-This can be an existing scope or one you create with helper functions such as `coroutineScope()`, [`runBlocking()`](#runblocking), or [`withContext()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html#).
-Each builder defines how the coroutine starts and how you interact with its result.
-
-### `CoroutineScope.launch()`
-
-The [`CoroutineScope.launch()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/launch.html#) coroutine builder function is an extension function on `CoroutineScope`.
-It starts a new coroutine without blocking the rest of the scope, inside an existing [coroutine scope](#coroutine-scope-and-structured-concurrency).
-
-Use `CoroutineScope.launch()` to run a task alongside other work when the result isn't needed or you don't want to wait for it:
+使用 `CoroutineScope.launch()` 在不需要结果或不想等待结果时与其他工作并行运行任务：
 
 ```kotlin
-// Imports the kotlin.time.Duration to enable expressing duration in milliseconds
 import kotlin.time.Duration.Companion.milliseconds
-
 import kotlinx.coroutines.*
 
 suspend fun main() {
@@ -391,83 +213,68 @@ suspend fun main() {
     }
 }
 
-//sampleStart
 suspend fun performBackgroundWork() = coroutineScope { // this: CoroutineScope
-    // Starts a coroutine that runs without blocking the scope
+    // 启动一个在不阻塞作用域的情况下运行的协程
     this.launch {
-        // Suspends to simulate background work
+        // 挂起以模拟后台工作
         delay(100.milliseconds)
-        println("Sending notification in background")
+        println("在后台发送通知")
     }
 
-    // Main coroutine continues while a previous one suspends
-    println("Scope continues")
+    // 主协程继续，而前一个协程在后台工作
+    println("作用域继续")
 }
-//sampleEnd
 ```
-{kotlin-runnable="true"}
 
-After running this example, you can see that the `main()` function isn't blocked by `CoroutineScope.launch()` and keeps running other code while the coroutine works in the background.
+运行此示例后，你可以看到 `main()` 函数没有被 `CoroutineScope.launch()` 阻塞，并在协程在后台工作时继续运行其他代码。
 
-> The `CoroutineScope.launch()` function returns a [`Job`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-job/) handle.
-> Use this handle to wait for the launched coroutine to complete.
-> For more information, see [Cancellation and timeouts](cancellation-and-timeouts.md#cancel-coroutines).
-> 
-{style="tip"}
+> `CoroutineScope.launch()` 函数返回 [`Job`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-job/) 句柄。使用此句柄等待启动的协程完成。有关更多信息，请参阅[取消与超时](02-cancellation-and-timeouts.md#取消协程)。
 
-### `CoroutineScope.async()`
+### CoroutineScope.async()
 
-The [`CoroutineScope.async()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/async.html) coroutine builder function is an extension function on `CoroutineScope`.
-It starts a concurrent computation inside an existing [coroutine scope](#coroutine-scope-and-structured-concurrency) and returns a [`Deferred`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-deferred/) handle that represents an eventual result.
-Use the `.await()` function to suspend the code until the result is ready:
+[`CoroutineScope.async()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/async.html) 协程构建器函数是 `CoroutineScope` 上的扩展函数。它在现有[协程作用域](#协程作用域与结构化并发)内启动并发计算并返回表示最终结果的 [`Deferred`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-deferred/) 句柄。使用 `.await()` 函数挂起代码直到结果准备好：
 
 ```kotlin
-// Imports the kotlin.time.Duration to enable expressing duration in milliseconds
 import kotlin.time.Duration.Companion.milliseconds
-
 import kotlinx.coroutines.*
 
-//sampleStart
 suspend fun main() = withContext(Dispatchers.Default) { // this: CoroutineScope
-    // Starts downloading the first page
+    // 开始下载第一页
     val firstPage = this.async {
         delay(50.milliseconds)
-        "First page"
+        "第一页"
     }
 
-    // Starts downloading the second page in parallel
+    // 并行开始下载第二页
     val secondPage = this.async {
         delay(100.milliseconds)
-        "Second page"
+        "第二页"
     }
 
-    // Awaits both results and compares them
+    // 等待两个结果并比较它们
     val pagesAreEqual = firstPage.await() == secondPage.await()
-    println("Pages are equal: $pagesAreEqual")
+    println("页面是否相等: $pagesAreEqual")
 }
-//sampleEnd
 ```
-{kotlin-runnable="true"}
 
-### `runBlocking()`
+### runBlocking()
 
-The [`runBlocking()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/run-blocking.html) coroutine builder function creates a coroutine scope and blocks the current [thread](#comparing-coroutines-and-jvm-threads) until
-the coroutines launched in that scope finish.
+[`runBlocking()`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/run-blocking.html) 协程构建器函数创建协程作用域并阻塞当前[线程](#协程与-jvm-线程对比)直到该作用域中启动的协程完成。
 
-Use `runBlocking()` only when there is no other option to call suspending code from non-suspending code:
+只在无法从非挂起代码调用挂起代码时才使用 `runBlocking()`：
 
 ```kotlin
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.*
 
-// A third-party interface you can't change
+// 你无法更改的第三方接口
 interface Repository {
     fun readItem(): Int
 }
 
 object MyRepository : Repository {
     override fun readItem(): Int {
-        // Bridges to a suspending function
+        // 桥接到挂起函数
         return runBlocking {
             myReadItem()
         }
@@ -480,96 +287,76 @@ suspend fun myReadItem(): Int {
 }
 ```
 
-## Coroutine dispatchers
+---
 
-A [_coroutine dispatcher_](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-dispatchers/#) controls which thread or thread pool coroutines use for their execution.
-Coroutines aren't always tied to a single thread.
-They can pause on one thread and resume on another, depending on the dispatcher.
-This lets you run many coroutines at the same time without allocating a separate thread for every coroutine.
+## 协程调度器
 
-> Even though coroutines can suspend and resume on different threads,
-> values written before the coroutine suspends are still guaranteed to be available within the same coroutine when it resumes.
+**协程调度器**控制协程使用哪个线程或线程池进行执行。协程并不总是绑定到单个线程。它们可以在一个线程上挂起并在另一个线程上恢复，具体取决于调度器。这让你可以同时运行许多协程而不为每个协程分配单独的线程。
+
+> 即使协程可以在不同线程上挂起和恢复，在协程挂起之前写入的值仍然保证在同一协程恢复时可用。
+
+调度器与[协程作用域](#协程作用域与结构化并发)一起工作，定义协程何时运行以及在哪里运行。协程作用域控制协程的生命周期，调度器控制用于执行的线程。
+
+> 你不需要为每个协程指定调度器。默认情况下，协程从其父作用域继承调度器。你可以指定调度器以在不同的上下文中运行协程。
 >
-{style="tip"}
+> 如果协程上下文不包含调度器，协程构建器使用 `Dispatchers.Default`。
 
-A dispatcher works together with the [coroutine scope](#coroutine-scope-and-structured-concurrency) to define when coroutines run and where they run.
-While the coroutine scope controls the coroutine's lifecycle, the dispatcher controls which threads are used for execution.
+`kotlinx.coroutines` 库包含用于不同用例的不同调度器。例如，[`Dispatchers.Default`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-dispatchers/-default.html) 在共享线程池上运行协程，在与主线程分离的后台执行工作。这使其成为数据处理等 CPU 密集型操作的理想选择。
 
-> You don't have to specify a dispatcher for every coroutine.
-> By default, coroutines inherit the dispatcher from their parent scope.
-> You can specify a dispatcher to run a coroutine in a different context.
-> 
-> If the coroutine context doesn't include a dispatcher, coroutine builders use `Dispatchers.Default`.
->
-{style="note"}
-
-The `kotlinx.coroutines` library includes different dispatchers for different use cases.
-For example, [`Dispatchers.Default`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-dispatchers/-default.html) runs coroutines on a shared pool of threads, performing work in the background,
-separate from the main thread. This makes it an ideal choice for CPU-intensive operations like data processing.
-
-To specify a dispatcher for a coroutine builder like `CoroutineScope.launch()`, pass it as an argument:
+要为 `CoroutineScope.launch()` 等协程构建器指定调度器，将其作为参数传递：
 
 ```kotlin
 suspend fun runWithDispatcher() = coroutineScope { // this: CoroutineScope
     this.launch(Dispatchers.Default) {
-        println("Running on ${Thread.currentThread().name}")
+        println("运行在 ${Thread.currentThread().name}")
     }
 }
 ```
 
-Alternatively, you can use a `withContext()` block to run all code in it on a specified dispatcher:
+或者，你可以使用 `withContext()` 块在其中所有代码在指定调度器上运行：
 
 ```kotlin
-// Imports the kotlin.time.Duration to enable expressing duration in milliseconds
 import kotlin.time.Duration.Companion.milliseconds
-
 import kotlinx.coroutines.*
 
-//sampleStart
 suspend fun main() = withContext(Dispatchers.Default) { // this: CoroutineScope
-    println("Running withContext block on ${Thread.currentThread().name}")
+    println("withContext 块运行在 ${Thread.currentThread().name}")
 
     val one = this.async {
-        println("First calculation starting on ${Thread.currentThread().name}")
+        println("第一次计算开始于 ${Thread.currentThread().name}")
         val sum = (1L..500_000L).sum()
         delay(200L)
-        println("First calculation done on ${Thread.currentThread().name}")
+        println("第一次计算完成于 ${Thread.currentThread().name}")
         sum
     }
 
     val two = this.async {
-        println("Second calculation starting on ${Thread.currentThread().name}")
+        println("第二次计算开始于 ${Thread.currentThread().name}")
         val sum = (500_001L..1_000_000L).sum()
-        println("Second calculation done on ${Thread.currentThread().name}")
+        println("第二次计算完成于 ${Thread.currentThread().name}")
         sum
     }
 
-    // Waits for both calculations and prints the result
-    println("Combined total: ${one.await() + two.await()}")
+    // 等待两个计算并打印结果
+    println("总和: ${one.await() + two.await()}")
 }
-//sampleEnd
 ```
-{kotlin-runnable="true"}
 
-To learn more about coroutine dispatchers and their uses, including other dispatchers like [`Dispatchers.IO`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-dispatchers/-i-o.html) and [`Dispatchers.Main`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-dispatchers/-main.html), see [Coroutine context and dispatchers](coroutine-context-and-dispatchers.md).
+要了解更多关于协程调度器及其用法，包括 [`Dispatchers.IO`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-dispatchers/-i-o.html) 和 [`Dispatchers.Main`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-dispatchers/-main.html) 等其他调度器，请参阅[协程上下文与调度器](04-coroutine-context-and-dispatchers.md)。
 
-## Comparing coroutines and JVM threads
+---
 
-While coroutines are suspendable computations that run code concurrently like threads on the JVM, they work differently under the hood.
+## 协程与 JVM 线程对比
 
-A _thread_ is managed by the operating system. Threads can run tasks in parallel on multiple CPU cores and represent a standard approach to concurrency on the JVM.
-When you create a thread, the operating system allocates memory for its stack and uses the kernel to switch between threads.
-This makes threads powerful but also resource-intensive.
-Each thread usually needs a few megabytes of memory, and typically the JVM can only handle a few thousand threads at once.
+虽然协程是在 JVM 上并发运行代码的可挂起计算，类似于线程，但它们在底层工作方式不同。
 
-On the other hand, a coroutine isn't bound to a specific thread.
-It can suspend on one thread and resume on another, so many coroutines can share the same thread pool.
-When a coroutine suspends, the thread isn't blocked and remains free to run other tasks.
-This makes coroutines much lighter than threads and allows running millions of them in one process without exhausting system resources.
+**线程**由操作系统管理。线程可以在多个 CPU 核心上并行运行任务，代表 JVM 上标准并发方法。创建线程时，操作系统为其栈分配内存并使用内核在线程之间切换。这使线程功能强大但也资源密集。每个线程通常需要几兆字节的内存，通常 JVM 一次只能处理几千个线程。
 
-![Comparing coroutines and threads](coroutines-and-threads.svg){width="700"}
+另一方面，**协程**不绑定到特定线程。它可以在一个线程上挂起并在另一个线程上恢复，因此许多协程可以共享同一线程池。当协程挂起时，线程不会被阻塞，仍然可以运行其他任务。这使协程比线程轻量得多，允许在一个进程中运行数百万个协程而不耗尽系统资源。
 
-Let's look at an example where 50,000 coroutines each wait five seconds and then print a period (`.`):
+![协程与线程对比](coroutines-and-threads.svg){width="700"}
+
+让我们看一个示例，其中 50,000 个协程各等待 5 秒然后打印一个点（`.`）：
 
 ```kotlin
 import kotlin.time.Duration.Companion.seconds
@@ -577,14 +364,13 @@ import kotlinx.coroutines.*
 
 suspend fun main() {
     withContext(Dispatchers.Default) {
-        // Launches 50,000 coroutines that each wait five seconds, then print a period
+        // 启动 50,000 个协程，各等待 5 秒然后打印一个点
         printPeriods()
     }
 }
 
-//sampleStart
 suspend fun printPeriods() = coroutineScope { // this: CoroutineScope
-    // Launches 50,000 coroutines that each wait five seconds, then print a period
+    // 启动 50,000 个协程，各等待 5 秒然后打印一个点
     repeat(50_000) {
         this.launch {
             delay(5.seconds)
@@ -592,11 +378,9 @@ suspend fun printPeriods() = coroutineScope { // this: CoroutineScope
         }
     }
 }
-//sampleEnd
 ```
-{kotlin-runnable="true" kotlin-min-compiler-version="1.3"}
 
-Now let's look at the same example using JVM threads:
+现在让我们看看使用 JVM 线程的相同示例：
 
 ```kotlin
 import kotlin.concurrent.thread
@@ -610,18 +394,16 @@ fun main() {
     }
 }
 ```
-{kotlin-runnable="true" validate="false"}
 
-Running this version uses much more memory because each thread needs its own memory stack.
-For 50,000 threads, that can be up to 100 GB, compared to roughly 500 MB for the same number of coroutines.
+运行此版本使用更多内存，因为每个线程需要自己的内存栈。对于 50,000 个线程，这可能高达 100 GB，而相同数量的协程大约只需 500 MB。
 
-Depending on your operating system, JDK version, and settings,
-the JVM thread version may throw an out-of-memory error or slow down thread creation to avoid running too many threads at once.
+根据你的操作系统、JDK 版本和设置，JVM 线程版本可能会抛出内存不足错误或减慢线程创建以避免一次运行太多线程。
 
-## What's next
+---
 
-* Discover more about combining suspending functions in [Composing suspending functions](composing-suspending-functions.md).
-* Learn how to cancel coroutines and handle timeouts in [Cancellation and timeouts](cancellation-and-timeouts.md).
-* Dive deeper into coroutine execution and thread management in [Coroutine context and dispatchers](coroutine-context-and-dispatchers.md).
-* Learn how to return multiple asynchronously computed values in [Asynchronous flows](flow.md).
+## 下一步
 
+- 在[组合挂起函数](03-composing-suspending-functions.md)中发现更多关于组合挂起函数的内容。
+- 在[取消与超时](02-cancellation-and-timeouts.md)中学习如何取消协程和处理超时。
+- 在[协程上下文与调度器](04-coroutine-context-and-dispatchers.md)中深入了解协程执行和线程管理。
+- 在[异步流](05-flow.md)中学习如何返回多个异步计算的值。
