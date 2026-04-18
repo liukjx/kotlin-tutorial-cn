@@ -197,6 +197,136 @@ listOf(1, 2, 3, 4, 5)
 
 ---
 
+## 实战案例：PICO UI 组件集合操作
+
+### forEach - 遍历集合
+
+在 PICO 组件展示项目中，大量使用 `forEach` 渲染 UI 列表：
+
+```kotlin
+// 文件：component-playground-0.10.7/.../DialogPage.kt
+
+@Composable
+fun MenuDemo() {
+    // Kotlin 知识点：forEach 遍历集合
+    // 在 Compose 中用于渲染多个同类组件
+    listOf("编辑", "分享", "删除", "取消").forEach { item ->
+        DropdownMenuItem(
+            onClick = { /* 处理点击 */ }
+        ) {
+            Text(item)
+        }
+    }
+}
+
+// 文件：InteractionPage.kt
+
+@Composable
+fun CategoryTabs(categories: List<String>, onCategorySelected: (Int) -> Unit) {
+    // forEachIndexed: 获取索引和值
+    categories.forEachIndexed { index, category ->
+        Chip(
+            selected = selectedCategory == index,
+            onClick = { onCategorySelected(index) }
+        ) {
+            Text(category)
+        }
+    }
+}
+```
+
+**forEach vs for 循环**：
+- `forEach` 更 Kotlin 风格
+- `forEachIndexed` 提供索引
+- 可以与 Lambda 链式调用
+
+### 链式操作实战
+
+```kotlin
+// 文件：physics-0.10.7/.../PhysicsManager.kt
+
+/**
+ * 重置所有多米诺骨牌
+ */
+fun resetAllDominoes(dominoNames: List<String>) {
+    dominoNames
+        .mapNotNull { name -> rootEntity.findEntity(name) }  // 过滤掉 null
+        .filter { it.enabled }  // 只处理启用的实体
+        .forEach { domino ->
+            domino.components[TransformComponent::class.java]?.let { transform ->
+                transform.position = originalPositions[domino.name] ?: Vector3.ZERO
+            }
+        }
+}
+
+// 等价于传统的 for 循环，但更简洁
+fun resetAllDominoesOld(dominoNames: List<String>) {
+    for (name in dominoNames) {
+        val domino = rootEntity.findEntity(name)
+        if (domino != null && domino.enabled) {
+            val transform = domino.components[TransformComponent::class.java]
+            if (transform != null) {
+                transform.position = originalPositions[domino.name] ?: Vector3.ZERO
+            }
+        }
+    }
+}
+```
+
+### 空安全与集合操作结合
+
+```kotlin
+// 文件：spatialvideo-0.10.7/.../PlaybackManager.kt
+
+/**
+ * 获取视频时长
+ *
+ * Kotlin 知识点：
+ * - takeIf { }: 满足条件返回原值，否则返回 null
+ * - ?:: Elvis 运算符，提供默认值
+ */
+fun getDuration(): Long {
+    return player.getDuration().takeIf { it > 0 } ?: 1L
+}
+
+// 等价于
+fun getDurationOld(): Long {
+    val duration = player.getDuration()
+    return if (duration > 0) duration else 1L
+}
+```
+
+### filterNotNull 实战
+
+```kotlin
+// 文件：physics-0.10.7/.../PhysicsManager.kt
+
+/**
+ * 获取所有有效的物理实体
+ */
+fun getValidEntities(names: List<String>): List<Entity> {
+    return names
+        .map { rootEntity.findEntity(it) }  // List<Entity?>
+        .filterNotNull()  // List<Entity>（过滤掉 null）
+        .filter { it.enabled }
+}
+```
+
+### 实际应用总结
+
+| 操作符 | 使用场景 | PICO 示例 |
+|--------|----------|----------|
+| `forEach` | 遍历渲染 UI | 渲染菜单项 |
+| `forEachIndexed` | 需要索引 | 标签页索引 |
+| `map` | 转换类型 | 实体名称 -> 实体对象 |
+| `filter` | 过滤条件 | 只处理启用的实体 |
+| `filterNotNull` | 过滤空值 | 有效的实体列表 |
+| `mapNotNull` | map + filterNotNull | 一步完成转换和过滤 |
+| `takeIf` | 条件判断 | 获取有效时长 |
+| `?:` | 提供默认值 | 时长默认 1L |
+
+---
+
 ## 练习
 
 ### 1. 过滤质数

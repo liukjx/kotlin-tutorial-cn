@@ -218,6 +218,190 @@ if (list is List<*>) { }       // ✅ 星投影
 
 ---
 
+## 实战案例：PICO 泛型应用
+
+### 泛型约束 - 事件系统
+
+在 PICO 物理项目中，使用泛型约束实现类型安全的事件系统：
+
+```kotlin
+// 文件：physics-0.10.7/.../EventManager.kt
+
+/**
+ * 事件基类
+ */
+open class Event
+
+class CollisionEvent(val entity1: Entity, val entity2: Entity) : Event()
+
+class TriggerEvent(val trigger: Entity) : Event()
+
+/**
+ * 事件管理器
+ *
+ * Kotlin 知识点：泛型约束
+ * - <T : Event>: 限制 T 必须是 Event 的子类
+ * - Class<T>: Java/Kotlin 互操作的类型对象
+ */
+class EventManager {
+    /**
+     * 订阅碰撞事件
+     *
+     * @param T 必须是 Event 的子类
+     * @param content 空间视图内容
+     * @param event 事件类型的 Class 对象
+     */
+    fun <T : Event> subscribeCollisionEvent(
+        content: SpatialViewContent, 
+        event: Class<T>
+    ) {
+        // 根据事件类型注册监听器
+        when (event) {
+            CollisionEvent::class.java -> {
+                // 注册碰撞事件监听
+            }
+            TriggerEvent::class.java -> {
+                // 注册触发器事件监听
+            }
+        }
+    }
+    
+    /**
+     * 发送事件
+     */
+    fun <T : Event> emit(event: T) {
+        // 通知所有订阅者
+    }
+}
+
+// 使用示例
+val manager = EventManager()
+manager.subscribeCollisionEvent(content, CollisionEvent::class.java)
+manager.emit(CollisionEvent(entity1, entity2))
+```
+
+**泛型约束的优势**：
+- **类型安全**：只能传入 Event 的子类
+- **编译时检查**：错误在编译时发现
+- **智能类型推断**：编译器知道 T 是 Event 的子类
+
+### 泛型类 - 延迟结果
+
+在 PICO ML 项目中，使用泛型表示异步计算结果：
+
+```kotlin
+// 文件：spatialml-0.10.7/.../SrAlgorithmImpl.kt
+
+/**
+ * 超分辨率算法实现
+ *
+ * Kotlin 知识点：
+ * - 泛型类: Deferred<T> 表示延迟结果
+ * - 泛型属性: GlobalTensor, PipelineTensor
+ */
+class SrAlgorithmImpl {
+    // 延迟初始化的泛型属性
+    private lateinit var displaySceneGraph: GlobalTensor
+    private lateinit var dynamicTexture: GlobalTensor
+    private lateinit var zoomAffine: GlobalTensor
+    private lateinit var zoomPoints: PipelineTensor
+    
+    /**
+     * 执行超分辨率处理
+     *
+     * @param input 输入图像
+     * @return 处理结果
+     */
+    suspend fun process(input: Bitmap): Bitmap {
+        // 使用泛型张量进行计算
+        displaySceneGraph.upload(input)
+        val output = zoomPoints.download()
+        return output
+    }
+}
+```
+
+### 多类型参数实战
+
+```kotlin
+// 文件：spatialml-0.10.7/.../VQAWrapper.kt
+
+/**
+ * 视觉问答包装器
+ *
+ * Kotlin 知识点：多类型参数
+ * - IMAGE_RESPOND: 图像响应类型
+ * - VQA_RESPOND: 问答响应类型
+ */
+class VQAWrapper<IMAGE_RESPOND, VQA_RESPOND>(
+    private val queryFormatter: (IMAGE_RESPOND?, ByteArray) -> String,
+    private val queryRespondParser: (VQA_RESPOND) -> String
+) {
+    suspend fun query(image: IMAGE_RESPOND, question: ByteArray): String {
+        val query = queryFormatter(image, question)
+        val response: VQA_RESPOND = sendQuery(query)
+        return queryRespondParser(response)
+    }
+}
+
+/**
+ * 工厂方法 - 使用多类型参数
+ *
+ * Kotlin 知识点：inline + reified
+ * - 具体化两个类型参数
+ * - noinline: Lambda 不内联
+ */
+inline fun <reified IMAGE_RESPOND, reified VQA_RESPOND> createVQAWrapper(
+    noinline queryFormatter: (IMAGE_RESPOND?, ByteArray) -> String,
+    noinline queryRespondParser: (VQA_RESPOND) -> String = { it.toString() }
+): VQAWrapper<IMAGE_RESPOND, VQA_RESPOND> {
+    return VQAWrapper(queryFormatter, queryRespondParser)
+}
+```
+
+### 泛型型变实战
+
+```kotlin
+// PICO SDK 中的协变示例
+
+/**
+ * 实体生产者
+ *
+ * Kotlin 知识点：协变 out
+ * - 只生产实体，不消费
+ * - EntityProducer<Mesh> 可以赋值给 EntityProducer<Entity>
+ */
+interface EntityProducer<out T : Entity> {
+    fun create(): T
+    fun createBatch(count: Int): List<T>
+}
+
+/**
+ * 组件消费者
+ *
+ * Kotlin 知识点：逆变 in
+ * - 只消费组件，不生产
+ * - ComponentConsumer<Component> 可以赋值给 ComponentConsumer<TransformComponent>
+ */
+interface ComponentConsumer<in T : Component> {
+    fun accept(component: T)
+    fun acceptAll(components: List<T>)
+}
+```
+
+### 泛型使用建议
+
+| 场景 | 推荐方案 | 示例 |
+|------|----------|----------|
+| 事件系统 | 泛型约束 `<T : Event>` | EventManager |
+| 异步结果 | 泛型类 `Deferred<T>` | 协程 |
+| 工厂方法 | `inline + reified` | createVQAWrapper |
+| 生产者 | 协变 `out T` | EntityProducer |
+| 消费者 | 逆变 `in T` | ComponentConsumer |
+| 多类型 | `<K, V>` | Map、Pair |
+
+---
+
 ## 练习
 
 ### 1. 泛型栈

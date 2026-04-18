@@ -196,6 +196,115 @@ class C : A, B {
 
 ---
 
+## 实战案例：PICO 接口委托模式
+
+### 接口委托 - 组合优于继承
+
+在 PICO 欢迎空间项目中，使用接口委托实现多重继承效果：
+
+```kotlin
+// 文件：welcomespace-0.10.7/.../ItemSelection.kt
+
+/**
+ * 选中状态管理接口
+ */
+interface ItemSelector {
+    fun select(name: String)
+    fun deselect(name: String)
+    fun deselectAll()
+    fun isSelected(name: String): Boolean
+}
+
+/**
+ * 接口实现
+ */
+class ItemSelectorImpl : ItemSelector {
+    private val selectedItems = mutableStateMapOf<String, Boolean>()
+    
+    override fun select(name: String) {
+        selectedItems[name] = true
+    }
+    
+    override fun deselect(name: String) {
+        selectedItems[name] = false
+    }
+    
+    override fun deselectAll() {
+        selectedItems.clear()
+    }
+    
+    override fun isSelected(name: String): Boolean {
+        return selectedItems[name] ?: false
+    }
+}
+
+/**
+ * 视图模型 - 使用委托模式
+ *
+ * Kotlin 知识点：接口委托
+ * - by 关键字将接口实现委托给另一个对象
+ * - 类似多重继承，但更灵活
+ * - ViewModel 自动拥有 ItemSelector 的所有方法
+ */
+class FurnitureLibraryViewModel : 
+    ViewModel(),
+    ItemSelector by ItemSelectorImpl() {  // 委托给 ItemSelectorImpl
+    
+    // ViewModel 自动拥有 select、deselect、isSelected 等方法
+    // 无需手动实现，无需手动转发调用
+    
+    fun onFurnitureClicked(name: String) {
+        if (isSelected(name)) {
+            deselect(name)
+        } else {
+            select(name)
+        }
+    }
+}
+
+// 使用示例
+val viewModel = FurnitureLibraryViewModel()
+viewModel.select("chair")  // 自动调用 ItemSelectorImpl 的方法
+viewModel.isSelected("chair")  // true
+```
+
+**委托模式的优势**：
+- **代码复用**：多个类可以共享同一个接口实现
+- **组合优于继承**：更灵活的代码组织
+- **减少样板代码**：无需手动实现每个方法
+- **运行时替换**：可以动态替换委托对象
+
+### 委托 vs 继承对比
+
+```kotlin
+// ❌ 继承方式：Java 只能单继承
+class FurnitureLibraryViewModel : ViewModel(), ItemSelector {
+    private val selector = ItemSelectorImpl()
+    
+    // 必须手动转发所有方法
+    override fun select(name: String) = selector.select(name)
+    override fun deselect(name: String) = selector.deselect(name)
+    override fun deselectAll() = selector.deselectAll()
+    override fun isSelected(name: String) = selector.isSelected(name)
+}
+
+// ✅ 委托方式：Kotlin 自动生成转发代码
+class FurnitureLibraryViewModel : 
+    ViewModel(),
+    ItemSelector by ItemSelectorImpl()
+```
+
+### 实际应用场景
+
+| 场景 | 委托优势 | 示例 |
+|------|----------|----------|
+| 多个接口实现 | 避免方法冲突 | ViewModel 实现多个功能接口 |
+| 代码复用 | 共享实现 | 多个类共享同一套选中逻辑 |
+| 测试 | 可注入 mock | 单元测试时替换委托对象 |
+| 运行时切换 | 动态替换策略 | 根据配置切换实现 |
+
+---
+
 ## 练习
 
 ### 1. 可比较接口
