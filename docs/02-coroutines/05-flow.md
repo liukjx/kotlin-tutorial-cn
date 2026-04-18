@@ -493,6 +493,151 @@ class EventBus {
 
 ---
 
+## 实战案例：PICO 视频播放器
+
+### StateFlow 状态管理
+
+在 PICO 视频播放器中，`StateFlow` 用于管理播放状态：
+
+```kotlin
+// 文件：spatialvideo-0.10.7/app/src/main/java/.../VideoViewModel.kt
+
+class VideoViewModel : ViewModel() {
+    
+    // 私有可变状态
+    private val _videoState = MutableStateFlow(PlaybackState.READY)
+    
+    // 公开只读状态
+    val videoState: StateFlow<PlaybackState> = _videoState.asStateFlow()
+    
+    // 播放时间
+    private val _playbackTime = MutableStateFlow(0L)
+    
+    // 是否正在拖拽进度条
+    private val _isSeeking = MutableStateFlow(false)
+    
+    // 拖拽位置
+    private val _seekingPosition = MutableStateFlow(0f)
+}
+```
+
+**为什么用 StateFlow？**
+- 总是有值，适合 UI 状态
+- 支持多个订阅者
+- 线程安全
+- 与 Compose/LiveData 集成良好
+
+### combine - 合并多个 Flow
+
+在视频播放器中，需要根据多个状态计算进度显示：
+
+```kotlin
+/**
+ * 视频进度
+ * 
+ * 【逻辑】
+ * - 拖拽中: 显示拖拽位置
+ * - 非拖拽: 显示实际播放时间
+ */
+val videoProgress: StateFlow<Float> =
+    combine(
+        _playbackTime,      // 实际播放时间
+        _isSeeking,         // 是否正在拖拽
+        _seekingPosition    // 拖拽位置
+    ) { playbackTime, isSeekingProgress, seekingPosition ->
+        // 拖拽时显示拖拽位置，否则显示实际时间
+        if (isSeekingProgress) seekingPosition else playbackTime.toFloat()
+    }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),  // 5秒后停止收集
+        initialValue = 0f
+    )
+```
+
+**combine 的优势**：
+- 任一 Flow 变化时重新计算
+- 自动取消上游 Flow
+- 将冷流转为热流（stateIn）
+
+### collectLatest - 收集最新值
+
+在播放状态监听中，使用 `collectLatest` 确保只处理最新状态：
+
+```kotlin
+init {
+    viewModelScope.launch {
+        // collectLatest: 收集最新值，新值到来时取消之前的处理
+        videoState.collectLatest { state ->
+            if (state == PlaybackState.PLAYING) {
+                // 播放中：持续更新进度
+                while (isActive) {
+                    _playbackTime.value = getCurrentTime()
+                    delay(PLAYBACK_UNIT_TIME)  // 每 50ms 更新一次
+                    
+                    // 检查是否播放完成
+                    if (hasCompleted()) {
+                        _videoState.value = PlaybackState.READY
+                        break
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**collectLatest vs collect**：
+- `collect`：顺序处理所有值
+- `collectLatest`：新值到来时取消之前的处理，适合搜索、状态切换等场景
+
+### 播放状态机
+
+完整的播放状态流转：
+
+```kotlin
+fun onPlayPauseClicked() {
+    when (manager.state) {
+        PlaybackState.READY -> {
+            manager.play()
+            _videoState.value = PlaybackState.PLAYING
+        }
+        PlaybackState.PLAYING -> {
+            manager.pause()
+            _videoState.value = PlaybackState.PAUSED
+        }
+        PlaybackState.PAUSED -> {
+            manager.resume()
+            _videoState.value = PlaybackState.PLAYING
+        }
+        else -> {}
+    }
+}
+```
+
+### 状态架构图
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  VideoViewModel                                          │
+├─────────────────────────────────────────────────────────┤
+│  _videoState: MutableStateFlow<PlaybackState>           │
+│  _playbackTime: MutableStateFlow<Long>                  │
+│  _isSeeking: MutableStateFlow<Boolean>                  │
+│  _seekingPosition: MutableStateFlow<Float>              │
+│                                                          │
+│  videoProgress: StateFlow<Float> (combine)              │
+│     └─ 合并 3 个状态 → 计算显示进度                      │
+├─────────────────────────────────────────────────────────┤
+│  UI 层订阅                                               │
+│  - PlaybackToolbar: 播放/暂停按钮                        │
+│  - ProgressBar: 进度条                                   │
+│  - TimeText: 时间显示                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 最佳实践
 
 ### ✅ 推荐

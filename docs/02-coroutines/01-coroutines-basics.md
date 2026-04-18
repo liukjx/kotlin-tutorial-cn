@@ -401,6 +401,159 @@ fun main() {
 
 ---
 
+---
+
+## 实战案例：PICO 视频播放器
+
+### suspend 函数 - 异步初始化
+
+在 PICO 视频播放器中，初始化是一个异步操作，使用 `suspend` 函数：
+
+```kotlin
+// 文件：spatialvideo-0.10.7/app/src/main/java/.../VideoViewModel.kt
+
+class VideoViewModel : ViewModel() {
+    
+    /**
+     * 初始化视频播放器
+     *
+     * 【初始化流程】
+     * 1. 设置播放器数据源
+     * 2. 组装平面视频面板实体
+     * 3. 组装 360° 视频球体实体
+     */
+    suspend fun initialize(converter: PhysicalLengthConverter, context: Context) {
+        // 设置播放器
+        manager.setup(context, VIDEO_PATH)
+        
+        // 组装平面视频面板
+        VideoEntityAssembler.assembleVideoPanel(
+            videoPanel,
+            manager.player,
+            converter.dpToLength(VideoEntityConfig.PANEL_WIDTH, LengthUnit.Meters),
+            converter.dpToLength(VideoEntityConfig.PANEL_HEIGHT, LengthUnit.Meters),
+        )
+        
+        // 组装 360° 视频球体
+        VideoEntityAssembler.assembleVideoSphere(videoSphere, manager.player)
+        
+        // 默认禁用 360° 球体
+        videoSphere.enabled = false
+    }
+}
+
+// 调用示例
+viewModelScope.launch {
+    videoViewModel.initialize(converter, context)
+}
+```
+
+**为什么用 suspend 函数？**
+- 初始化涉及 I/O 操作（加载视频）
+- 不阻塞 UI 线程
+- 支持取消和超时
+
+### viewModelScope - ViewModel 协程作用域
+
+在 ViewModel 中，使用 `viewModelScope` 管理协程生命周期：
+
+```kotlin
+class VideoViewModel : ViewModel() {
+    
+    // 私有可变状态
+    private val _videoState = MutableStateFlow(PlaybackState.READY)
+    val videoState: StateFlow<PlaybackState> = _videoState.asStateFlow()
+    
+    init {
+        // viewModelScope：ViewModel 销毁时自动取消协程
+        viewModelScope.launch {
+            videoState.collectLatest { state ->
+                if (state == PlaybackState.PLAYING) {
+                    while (isActive) {
+                        _playbackTime.value = getCurrentTime()
+                        delay(PLAYBACK_UNIT_TIME)
+                        
+                        if (hasCompleted()) {
+                            _videoState.value = PlaybackState.READY
+                            break
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**viewModelScope 的优势**：
+- 自动管理协程生命周期
+- ViewModel 销毁时自动取消协程
+- 避免内存泄漏
+
+### coroutineScope - 结构化并发
+
+在组装视频实体时，使用 `coroutineScope` 确保结构化并发：
+
+```kotlin
+// 文件：VideoEntityAssembler.kt
+
+object VideoEntityAssembler {
+    
+    suspend fun assembleVideoPanel(
+        entity: Entity,
+        player: CypressMediaPlayer,
+        width: Float,
+        height: Float
+    ) = coroutineScope {
+        // 并行加载材质和网格
+        val material = async { loadVideoMaterial() }
+        val mesh = async { createPanelMesh(width, height) }
+        
+        // 等待两者完成
+        entity.setMaterial(material.await())
+        entity.setMesh(mesh.await())
+    }
+    
+    suspend fun assembleVideoSphere(entity: Entity, player: CypressMediaPlayer) {
+        // 组装 360° 视频球体
+    }
+}
+```
+
+**coroutineScope 的优势**：
+- 创建新的协程作用域
+- 所有子协程完成才返回
+- 任一子协程失败则取消其他子协程
+
+### 协程调度器 - 线程切换
+
+```kotlin
+// 在主线程更新 UI，在 IO 线程加载数据
+viewModelScope.launch {
+    // 切换到 IO 线程加载数据
+    val data = withContext(Dispatchers.IO) {
+        loadDataFromDisk()
+    }
+    
+    // 自动切换回主线程更新 UI
+    updateUI(data)
+}
+```
+
+### 协程在 PICO 项目中的应用总结
+
+| 知识点 | 使用场景 | 示例 |
+|--------|----------|------|
+| `suspend` 函数 | 异步初始化、加载资源 | `initialize()` |
+| `viewModelScope` | ViewModel 中的协程管理 | 状态监听 |
+| `coroutineScope` | 结构化并发 | 并行加载资源 |
+| `Dispatchers.IO` | I/O 操作 | 加载视频 |
+| `Dispatchers.Main` | UI 更新 | 更新播放状态 |
+| `StateFlow` | 状态管理 | 播放状态、进度 |
+| `collectLatest` | 收集最新状态 | 状态监听 |
+
+---
+
 ## 下一步
 
 - 在[组合挂起函数](03-composing-suspending-functions.md)中发现更多关于组合挂起函数的内容。

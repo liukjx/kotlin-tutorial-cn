@@ -259,6 +259,170 @@ val map = mapOf("a" to 1)  // to 是中缀函数
 
 ---
 
+## 实战案例：PICO Spatial SDK
+
+### 顶级函数 - 应用入口
+
+在 PICO 项目中，每个示例应用都使用顶级函数作为入口：
+
+```kotlin
+// 文件：animation-0.10.7/app/src/main/java/.../Main.kt
+
+/**
+ * 主应用函数
+ *
+ * 这是一个顶级函数：
+ * - 不属于任何类
+ * - 可直接调用
+ * - 类似于 Java 的静态方法
+ *
+ * @param scope 空间应用作用域，由 SDK 在应用启动时注入
+ */
+fun mainApp(scope: SpatialAppScope) =
+    with(scope) {
+        DefaultWindowContainer {
+            PicoTheme {
+                Box {
+                    AnimationTypeTabBar()
+                    HomePage()
+                }
+            }
+        }
+    }
+```
+
+**为什么用顶级函数？**
+- Kotlin 风格：不强制所有代码都在类中
+- 简洁：不需要创建无意义的类
+- 与框架集成：SDK 通过反射调用顶级函数
+
+### 扩展函数 - SDK 集成
+
+PICO SDK 提供了大量扩展函数来简化开发：
+
+```kotlin
+// SDK 内部定义的扩展函数
+fun PhysicalLengthConverter.dpToLength(dp: Float, unit: LengthUnit): Float {
+    // 将 dp 转换为物理长度（米）
+}
+
+// 使用示例：spatialvideo 项目
+VideoEntityAssembler.assembleVideoPanel(
+    videoPanel,
+    manager.player,
+    converter.dpToLength(VideoEntityConfig.PANEL_WIDTH, LengthUnit.Meters),
+    converter.dpToLength(VideoEntityConfig.PANEL_HEIGHT, LengthUnit.Meters),
+)
+```
+
+**扩展函数的优势**：
+- 不修改原类代码
+- 调用方式自然 `converter.dpToLength(...)`
+- 按需导入，避免污染命名空间
+
+### 带默认参数的函数
+
+```kotlin
+// 文件：ComponentInfo.kt
+
+data class ComponentInfo(
+    val name: String,
+    val description: String,
+    val usage: String,
+    val codeExample: String? = null,  // 默认 null
+    val tips: String? = null          // 默认 null
+)
+
+// 创建时可选参数
+val simple = ComponentInfo(
+    name = "Button",
+    description = "按钮",
+    usage = "点击触发"
+    // codeExample 和 tips 使用默认值
+)
+
+val detailed = ComponentInfo(
+    name = "Slider",
+    description = "滑动条",
+    usage = "数值选择",
+    codeExample = "Slider(value = 50f) { }",
+    tips = "支持范围限制"
+)
+```
+
+### 高阶函数 - UI 组件
+
+在 Compose UI 中，高阶函数随处可见：
+
+```kotlin
+// Button 是一个高阶函数，onClick 参数是 Lambda
+Button(
+    onClick = { 
+        viewModel.onPlayPauseClicked() 
+    }
+) {
+    Text("播放")
+}
+
+// 自定义高阶函数
+@Composable
+fun ComponentCard(
+    info: ComponentInfo,
+    onExpanded: (Boolean) -> Unit  // 高阶函数参数
+) {
+    Card {
+        Column {
+            Text(text = info.name)
+            IconButton(onClick = { onExpanded(true) }) {
+                Icon(Icons.Default.Expand, "展开")
+            }
+        }
+    }
+}
+
+// 使用
+ComponentCard(
+    info = ComponentInfos.BUTTON,
+    onExpanded = { expanded ->
+        println("展开状态: $expanded")
+    }
+)
+```
+
+### 函数设计最佳实践
+
+```kotlin
+// ✅ 好的设计：使用默认参数
+fun loadData(
+    url: String,
+    timeout: Long = 5000,
+    retryCount: Int = 3
+) { ... }
+
+// ✅ 好的设计：扩展函数增强 SDK
+fun Entity.setPosition(x: Float, y: Float, z: Float) {
+    transform.position = Vector3(x, y, z)
+}
+
+// ✅ 好的设计：顶级函数作为入口
+fun mainApp(scope: SpatialAppScope) { ... }
+
+// ❌ 不好的设计：过多的参数
+fun loadData(url: String, timeout: Long, retry: Int, headers: Map<String, String>, ...)
+
+// ✅ 改进：使用配置对象
+data class LoadConfig(
+    val url: String,
+    val timeout: Long = 5000,
+    val retryCount: Int = 3,
+    val headers: Map<String, String> = emptyMap()
+)
+
+fun loadData(config: LoadConfig) { ... }
+```
+
+---
+
 ## 运算符重载
 
 使用 `operator` 关键字重载运算符：

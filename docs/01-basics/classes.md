@@ -374,6 +374,156 @@ Person.create()
 
 ---
 
+---
+
+## 实战案例：PICO Spatial SDK
+
+### 枚举类：播放状态管理
+
+在 PICO 视频播放器中，`PlaybackState` 枚举用于管理播放状态：
+
+```kotlin
+// 文件：spatialvideo-0.10.7/app/src/main/java/.../PlaybackState.kt
+
+/**
+ * 播放状态枚举
+ *
+ * @property value 状态值（用于序列化或跨进程传递）
+ */
+enum class PlaybackState(val value: Int) {
+    INIT(0),      // 初始状态，播放器未初始化
+    READY(1),     // 准备就绪，可以开始播放
+    PLAYING(2),   // 正在播放
+    PAUSED(3);    // 已暂停
+}
+```
+
+**状态机设计**：
+```
+INIT ──setup()──> READY ──play()──> PLAYING
+                      │                 │
+                 completed          pause()
+                      │                 │
+                      ▼                 ▼
+                   READY            PAUSED
+                                          │
+                                      resume()
+                                          │
+                                          ▼
+                                      PLAYING
+```
+
+**使用示例**：
+```kotlin
+class VideoViewModel : ViewModel() {
+    private val _videoState = MutableStateFlow(PlaybackState.READY)
+    
+    fun onPlayPauseClicked() {
+        when (manager.state) {
+            PlaybackState.READY -> {
+                manager.play()
+                _videoState.value = PlaybackState.PLAYING
+            }
+            PlaybackState.PLAYING -> {
+                manager.pause()
+                _videoState.value = PlaybackState.PAUSED
+            }
+            PlaybackState.PAUSED -> {
+                manager.resume()
+                _videoState.value = PlaybackState.PLAYING
+            }
+            else -> {}
+        }
+    }
+}
+```
+
+### 单例对象：组件信息仓库
+
+在 PICO 组件展示项目中，`object` 用于管理全局组件信息：
+
+```kotlin
+// 文件：component-playground-0.10.7/app/src/main/java/.../ComponentInfo.kt
+
+/**
+ * 所有预定义组件说明的集中入口
+ *
+ * 使用 `object` 表示整个应用只需要这一份静态数据
+ */
+object ComponentInfos {
+    // 交互控件
+    val BUTTON = ComponentInfo(
+        name = "Button",
+        description = "响应用户点击行为的基础按钮",
+        usage = "用于触发操作，如提交表单、确认操作等"
+    )
+    
+    val SWITCH = ComponentInfo(
+        name = "Switch",
+        description = "开关控件，在开/关两种状态之间切换",
+        usage = "用于设置开关，如通知开关、深色模式等"
+    )
+    
+    val SLIDER = ComponentInfo(
+        name = "Slider",
+        description = "滑动条，通过拖拽选择数值",
+        usage = "用于连续数值选择，如音量、亮度等"
+    )
+    
+    // 更多组件...
+}
+
+// 使用方式：类似常量仓库
+val info = ComponentInfos.BUTTON
+println(info.name)  // Button
+```
+
+**为什么用 object？**
+- 整个应用只需要一份实例
+- 类似静态常量仓库
+- 统一管理所有组件说明
+- 修改时不需要翻多个文件
+
+### 数据类：组件信息模型
+
+```kotlin
+// 与 enum 和 object 配合使用
+data class ComponentInfo(
+    val name: String,
+    val description: String,
+    val usage: String,
+    val codeExample: String? = null,
+    val tips: String? = null
+)
+
+// 在 UI 中使用
+@Composable
+fun ComponentList() {
+    val components = listOf(
+        ComponentInfos.BUTTON,
+        ComponentInfos.SWITCH,
+        ComponentInfos.SLIDER
+    )
+    
+    LazyColumn {
+        items(components) { info ->
+            ComponentCard(info)
+        }
+    }
+}
+```
+
+### 设计模式对比
+
+| 模式 | 使用场景 | 示例 |
+|------|----------|------|
+| `enum class` | 有限状态集合 | PlaybackState |
+| `object` | 单例、常量仓库 | ComponentInfos |
+| `data class` | 纯数据存储 | ComponentInfo |
+| `sealed class` | 有限继承层级 | Result.Success/Error |
+
+---
+
 ## 练习
 
 ### 1. 用户类

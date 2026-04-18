@@ -218,6 +218,127 @@ user.greet()  // Hello, I'm Kotlin
 
 ---
 
+---
+
+## 实战案例：PICO Spatial SDK
+
+### 组件说明数据类
+
+在 PICO 组件展示项目中，`ComponentInfo` 数据类用于存储 UI 组件的说明信息：
+
+```kotlin
+// 文件：component-playground-0.10.7/app/src/main/java/.../ComponentInfo.kt
+
+/**
+ * 单个组件的讲解信息
+ *
+ * 这是一个 Kotlin `data class`：
+ * - 适合表示“纯数据”
+ * - 自动生成 copy、toString、equals 等方法
+ */
+data class ComponentInfo(
+    val name: String,              // 组件名称
+    val description: String,       // 它是什么
+    val usage: String,             // 拿它干什么
+    val codeExample: String? = null,  // 代码示例（可选）
+    val tips: String? = null          // 使用建议（可选）
+)
+```
+
+**为什么用 data class？**
+- 纯数据存储，不需要复杂逻辑
+- 自动生成 `toString()` 方便调试
+- `copy()` 方便创建变体
+- `equals()` 基于内容比较
+
+### 使用示例
+
+```kotlin
+// 创建组件信息
+val buttonInfo = ComponentInfo(
+    name = "Button",
+    description = "响应用户点击行为的基础按钮",
+    usage = "用于触发操作，如提交表单、确认操作等",
+    codeExample = """
+        Button(onClick = { /* 处理点击 */ }) {
+            Text("确定")
+        }
+    """.trimIndent(),
+    tips = "配合 OutlinedButton 和 TextButton 实现不同视觉层级。"
+)
+
+// copy() 创建变体
+val outlinedButton = buttonInfo.copy(
+    name = "OutlinedButton",
+    tips = "边框按钮，用于次要操作。"
+)
+
+// 解构获取字段
+val (name, desc, usage) = buttonInfo
+println("组件: $name, 描述: $desc")
+
+// 在列表中使用
+val components = listOf(
+    buttonInfo,
+    ComponentInfo("Switch", "开关控件", "用于设置开关"),
+    ComponentInfo("Slider", "滑动条", "用于连续数值选择")
+)
+
+// 基于 name 去重
+components.distinctBy { it.name }
+```
+
+### 带默认参数的数据类
+
+```kotlin
+data class ComponentInfo(
+    val name: String,
+    val description: String,
+    val usage: String,
+    val codeExample: String? = null,  // 默认 null
+    val tips: String? = null          // 默认 null
+)
+
+// 创建时可选字段
+val simple = ComponentInfo(
+    name = "Button",
+    description = "按钮",
+    usage = "点击触发"
+    // codeExample 和 tips 使用默认值 null
+)
+```
+
+### 在 UI 中展示
+
+```kotlin
+// 文件：PlaygroundScreen.kt
+
+@Composable
+fun ComponentInfoCard(info: ComponentInfo) {
+    Column {
+        Text(text = info.name, style = MaterialTheme.typography.h6)
+        Text(text = info.description)
+        Text(text = info.usage)
+        
+        info.codeExample?.let { code ->
+            CodeBlock(code)
+        }
+        
+        info.tips?.let { tip ->
+            TipCard(tip)
+        }
+    }
+}
+```
+
+**设计优势**：
+- `data class` 让数据结构清晰
+- 默认参数让创建更灵活
+- 可空属性让可选信息不强制
+- 解构让使用更简洁
+
+---
+
 ## 练习
 
 ### 1. 学生类

@@ -312,6 +312,102 @@ val file = File("data.txt")
 
 ---
 
+---
+
+## 实战案例：PICO Spatial SDK
+
+### with() - 简化作用域访问
+
+在 PICO 动画示例中，`with(scope)` 用于简化 `SpatialAppScope` 的成员访问：
+
+```kotlin
+// 文件：animation-0.10.7/app/src/main/java/.../Main.kt
+
+fun mainApp(scope: SpatialAppScope) =
+    with(scope) {  // 👈 在闭包内直接访问 scope 的成员
+        DefaultWindowContainer {  // 等价于 scope.DefaultWindowContainer
+            PicoTheme {
+                Box {
+                    AnimationTypeTabBar()
+                    HomePage()
+                }
+            }
+        }
+    }
+```
+
+**为什么用 with？**
+- `SpatialAppScope` 需要频繁调用其成员
+- `with` 让代码更简洁，避免重复写 `scope.xxx`
+- 类似于 "用 scope 做以下操作" 的语义
+
+### let() - 空安全转换
+
+在视频播放器初始化中，`let` 用于资源初始化后的链式调用：
+
+```kotlin
+// 文件：spatialvideo-0.10.7/app/src/main/java/.../VideoViewModel.kt
+
+suspend fun initialize(converter: PhysicalLengthConverter, context: Context) {
+    manager.setup(context, VIDEO_PATH)
+    
+    // 使用 let 进行链式操作
+    VideoEntityAssembler.assembleVideoPanel(
+        videoPanel,
+        manager.player,
+        converter.dpToLength(VideoEntityConfig.PANEL_WIDTH, LengthUnit.Meters),
+        converter.dpToLength(VideoEntityConfig.PANEL_HEIGHT, LengthUnit.Meters),
+    )
+}
+```
+
+### apply() - 配置对象
+
+在实体配置中，`apply` 用于配置 3D 实体属性：
+
+```kotlin
+// 文件：physics-0.10.7/app/src/main/java/.../Domino.kt
+
+Entity().apply {
+    name = "Domino"
+    transform.position = Vector3(0f, 1f, 0f)
+    transform.rotation = Quaternion.identity
+}
+```
+
+**为什么用 apply？**
+- 返回对象本身，适合链式调用
+- 在闭包内直接访问属性
+- 类似于 "对对象进行配置" 的语义
+
+### also() - 副作用日志
+
+在组件信息定义中，`also` 可用于调试日志：
+
+```kotlin
+// 文件：component-playground-0.10.7/app/src/main/java/.../ComponentInfo.kt
+
+val BUTTON = ComponentInfo(
+    name = "Button",
+    description = "响应用户点击行为的基础按钮",
+    usage = "用于触发操作，如提交表单、确认操作等"
+).also {
+    println("注册组件: ${it.name}")  // 副作用：打印日志
+}
+```
+
+### 作用域函数选择指南
+
+| 函数    | 返回值      | 使用场景 |
+|---------|-------------|----------|
+| `let`   | Lambda 结果 | 空安全转换、链式调用 |
+| `run`   | Lambda 结果 | 同时需要对象和返回值 |
+| `with`  | Lambda 结果 | 非空对象的多个操作 |
+| `apply` | 对象本身    | 配置对象属性 |
+| `also`  | 对象本身    | 副作用（日志、验证） |
+
+---
+
 ## 练习
 
 ### 1. 过滤与映射
